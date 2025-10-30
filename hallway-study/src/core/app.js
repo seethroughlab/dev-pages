@@ -9,7 +9,7 @@ import { buildHeatmap, updateHeatmap, updateHeatmapVisibility, setPointInFrustum
 import { cameras, addCamera, seedCameras, setUpdateHeatmapCallback } from '../entities/camera-node.js';
 import { projectors, createProjectors } from '../entities/projector-node.js';
 import { pointInFrustum2D, updateRaycastVisualization } from '../systems/visibility.js';
-import { people, createPeople, updatePeople, generateTrackingJSON } from '../entities/people.js';
+import { people, createPeople, updatePeople, generateTrackingJSON, updateMusicInfoDisplay } from '../entities/people.js';
 import { setupGUI, setCallbacks as setGUICallbacks, addCameraToGUI, gui } from '../ui/gui.js';
 import { saveSettings, loadSettings, exportJSON, importJSON, setCamerasArray as setStorageCameras, setProjectorsArray } from '../ui/storage.js';
 
@@ -226,6 +226,7 @@ function animate(){
 
   updateWavyGridTexture(now / 1000, deltaTime, hall, people);
   updatePeople(deltaTime, cameras);
+  updateMusicInfoDisplay(); // Update key and BPM display
   updateRaycastVisualization(); // Draw raycast lines after visibility checks
   controls.update();
   renderer.render(scene, camera);

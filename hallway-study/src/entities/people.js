@@ -98,6 +98,29 @@ function updateAudioStatus(message, type = 'info') {
   }
 }
 
+// Update music info display (key and BPM)
+export function updateMusicInfoDisplay() {
+  const keyEl = document.getElementById('music-key');
+  const bpmEl = document.getElementById('music-bpm');
+  const musicInfoEl = document.querySelector('.music-info');
+
+  if (keyEl && bpmEl) {
+    // Update key display
+    const currentScale = scales[currentScaleIndex];
+    keyEl.textContent = currentScale.name;
+
+    // Update BPM display
+    bpmEl.textContent = Math.round(currentBPM);
+
+    // Add active class when audio is running
+    if (audioContext && audioContext.state === 'running' && musicInfoEl) {
+      musicInfoEl.classList.add('active');
+    } else if (musicInfoEl) {
+      musicInfoEl.classList.remove('active');
+    }
+  }
+}
+
 // Export FFT data getter
 export function getFFTData() {
   if (!analyserNode || !fftData) return null;
