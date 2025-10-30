@@ -72,10 +72,10 @@ function initAudio() {
 
     updateAudioStatus('Audio active - fade in...', 'success');
 
-    // Delay metronome start by 500ms, let it fade in naturally
+    // Delay drum scheduler start by 500ms, let it fade in naturally
     setTimeout(() => {
       if (audioContext && audioContext.state === 'running') {
-        startMetronome();
+        startDrumScheduler();
         updateAudioStatus('🎵 Musical floor active', 'success');
         console.log('🎵 Audio initialized - musical floor activated!');
       } else {
@@ -212,14 +212,16 @@ const SCALE_CHANGE_INTERVAL = 10; // seconds
 
 // Metronome state
 let metronomeInterval = null;
-const METRONOME_BPM = 90;
-const METRONOME_INTERVAL_MS = (60 / METRONOME_BPM) * 1000;
-const BEAT_DURATION_SEC = 60 / METRONOME_BPM;
-const SIXTEENTH_NOTE_SEC = BEAT_DURATION_SEC / 4; // 4 sixteenth notes per beat
+let currentBPM = 90; // Dynamic BPM based on movement
+const MIN_BPM = 60;
+const MAX_BPM = 140;
+let BEAT_DURATION_SEC = 60 / currentBPM;
+let SIXTEENTH_NOTE_SEC = BEAT_DURATION_SEC / 4;
 
 // Musical time tracking
 let musicalTimeStart = 0; // When audio started (audioContext time)
 let currentBeat = 0;
+let lastBeatTime = 0;
 
 // Chord progressions for each scale (4 chords, each lasting 4 beats = 16 beats total)
 // Each chord is defined as indices into the scale
@@ -499,78 +501,240 @@ function playPluck(frequency, xPos, zPos, hallwayWidth, hallwayLength, instrumen
   vibrato.stop(stopTime);
 }
 
-// Metronome beat function
-function playMetronomeBeat(beatNumber) {
+// Kick drum sound
+function playKick(time, volumeMultiplier = 1.0) {
   if (!audioContext) return;
 
-  const now = audioContext.currentTime;
+  const now = time || audioContext.currentTime;
 
-  // Different sound for downbeat (1) vs offbeats (2, 3, 4)
-  const isDownbeat = beatNumber % 4 === 1;
+  // Oscillator: 150Hz -> 40Hz (punchy low end)
+  const kickOsc = audioContext.createOscillator();
+  kickOsc.frequency.setValueAtTime(150, now);
+  kickOsc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
 
-  if (isDownbeat) {
-    // Kick drum sound (downbeat)
-    const kickOsc = audioContext.createOscillator();
-    kickOsc.frequency.setValueAtTime(150, now);
-    kickOsc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+  // Envelope: quick attack, medium decay
+  const kickEnv = audioContext.createGain();
+  kickEnv.gain.setValueAtTime(0.6 * volumeMultiplier, now);
+  kickEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
 
-    const kickEnv = audioContext.createGain();
-    kickEnv.gain.setValueAtTime(0.4, now);
-    kickEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-
-    kickOsc.connect(kickEnv);
-    kickEnv.connect(masterGain);
-
-    kickOsc.start(now);
-    kickOsc.stop(now + 0.15);
-  } else {
-    // Soft click (offbeats)
-    const clickOsc = audioContext.createOscillator();
-    clickOsc.frequency.value = 800;
-    clickOsc.type = 'square';
-
-    const clickEnv = audioContext.createGain();
-    clickEnv.gain.setValueAtTime(0.08, now);
-    clickEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
-
-    clickOsc.connect(clickEnv);
-    clickEnv.connect(masterGain);
-
-    clickOsc.start(now);
-    clickOsc.stop(now + 0.03);
+  // Add some punch with noise
+  const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.05, audioContext.sampleRate);
+  const noiseData = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < noiseData.length; i++) {
+    noiseData[i] = Math.random() * 2 - 1;
   }
+
+  const noise = audioContext.createBufferSource();
+  noise.buffer = noiseBuffer;
+
+  const noiseFilter = audioContext.createBiquadFilter();
+  noiseFilter.type = 'lowpass';
+  noiseFilter.frequency.value = 100;
+
+  const noiseEnv = audioContext.createGain();
+  noiseEnv.gain.setValueAtTime(0.2 * volumeMultiplier, now);
+  noiseEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+
+  noise.connect(noiseFilter);
+  noiseFilter.connect(noiseEnv);
+  noiseEnv.connect(masterGain);
+
+  kickOsc.connect(kickEnv);
+  kickEnv.connect(masterGain);
+
+  kickOsc.start(now);
+  kickOsc.stop(now + 0.5);
+  noise.start(now);
 }
 
-// Start metronome
-function startMetronome() {
-  if (metronomeInterval) return; // Already running
+// Snare drum sound
+function playSnare(time) {
+  if (!audioContext) return;
 
-  let beatCount = 1;
-  currentBeat = 1;
-  playMetronomeBeat(beatCount); // Play first beat immediately
+  const now = time || audioContext.currentTime;
 
-  metronomeInterval = setInterval(() => {
-    beatCount++;
-    currentBeat = beatCount;
-    playMetronomeBeat(beatCount);
+  // Noise for snare body
+  const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.2, audioContext.sampleRate);
+  const noiseData = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < noiseData.length; i++) {
+    noiseData[i] = Math.random() * 2 - 1;
+  }
 
-    // Log chord changes (every 4 beats)
-    if (beatCount % 4 === 1) {
-      const chordNum = Math.floor((beatCount - 1) / 4) % 4;
-      const chordNames = ['I', 'II', 'III', 'IV'];
-      console.log(`🎵 Chord: ${chordNames[chordNum]} (beat ${beatCount})`);
+  const noise = audioContext.createBufferSource();
+  noise.buffer = noiseBuffer;
+
+  const noiseFilter = audioContext.createBiquadFilter();
+  noiseFilter.type = 'highpass';
+  noiseFilter.frequency.value = 1000;
+
+  const noiseEnv = audioContext.createGain();
+  noiseEnv.gain.setValueAtTime(0.3, now);
+  noiseEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+  // Tonal component (gives snare its pitch)
+  const toneOsc = audioContext.createOscillator();
+  toneOsc.type = 'triangle';
+  toneOsc.frequency.value = 200;
+
+  const toneEnv = audioContext.createGain();
+  toneEnv.gain.setValueAtTime(0.15, now);
+  toneEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+
+  noise.connect(noiseFilter);
+  noiseFilter.connect(noiseEnv);
+  noiseEnv.connect(masterGain);
+
+  toneOsc.connect(toneEnv);
+  toneEnv.connect(masterGain);
+
+  noise.start(now);
+  toneOsc.start(now);
+  toneOsc.stop(now + 0.1);
+}
+
+// Calculate average movement speed of all people
+function getAverageMovementSpeed() {
+  if (people.length === 0) return 0;
+
+  let totalSpeed = 0;
+  let movingPeople = 0;
+
+  for (const person of people) {
+    if (!person.isDwelling && Math.abs(person.speed) > 0.1) {
+      totalSpeed += Math.abs(person.speed);
+      movingPeople++;
     }
-  }, METRONOME_INTERVAL_MS);
+  }
 
-  console.log('🥁 Metronome started at ' + METRONOME_BPM + ' BPM');
+  return movingPeople > 0 ? totalSpeed / movingPeople : 0;
 }
 
-// Stop metronome
-function stopMetronome() {
-  if (metronomeInterval) {
-    clearInterval(metronomeInterval);
-    metronomeInterval = null;
+// Update BPM based on movement
+function updateBPM() {
+  const avgSpeed = getAverageMovementSpeed();
+
+  // Map speed (0-1.3 m/s) to BPM (60-140)
+  // Slower movement = slower tempo, faster movement = faster tempo
+  const targetBPM = MIN_BPM + (avgSpeed / 1.3) * (MAX_BPM - MIN_BPM);
+
+  // Smooth BPM changes (don't jump abruptly)
+  currentBPM = currentBPM * 0.95 + targetBPM * 0.05;
+
+  // Update derived timing values
+  BEAT_DURATION_SEC = 60 / currentBPM;
+  SIXTEENTH_NOTE_SEC = BEAT_DURATION_SEC / 4;
+}
+
+// Drum patterns (K = kick, S = snare, - = rest, k = softer kick)
+const drumPatterns = [
+  {
+    name: 'Basic 4/4',
+    pattern: ['K', 'S', 'K', 'S'] // Classic four-on-floor
+  },
+  {
+    name: 'Breakbeat',
+    pattern: ['K', '-', 'S', '-', 'k', '-', 'S', 'k'] // 2-bar breakbeat
+  },
+  {
+    name: 'Double Kick',
+    pattern: ['K', 'k', 'S', '-', 'K', '-', 'S', 'k'] // 2-bar with double kicks
+  },
+  {
+    name: 'Half-Time',
+    pattern: ['K', '-', '-', '-', 'S', '-', '-', '-'] // 2-bar slow groove
+  },
+  {
+    name: 'Shuffle',
+    pattern: ['K', '-', 'k', 'S', '-', 'k', 'K', 'S'] // 2-bar shuffle feel
+  },
+  {
+    name: 'Boom-Bap',
+    pattern: ['K', '-', 'S', 'k', 'K', '-', 'S', '-'] // 2-bar hip-hop
   }
+];
+
+let currentPatternIndex = 0;
+let patternChangeCounter = 0;
+const BARS_PER_PATTERN = 8; // Switch pattern every 8 bars (32 beats)
+
+// Drum scheduler (runs continuously, schedules beats ahead)
+let nextBeatTime = 0;
+let isSchedulerRunning = false;
+const scheduleAheadTime = 0.1; // Schedule 100ms ahead
+
+function scheduleDrums() {
+  if (!audioContext || !isSchedulerRunning) return;
+
+  const currentTime = audioContext.currentTime;
+
+  // Schedule all beats that should happen in the next scheduleAheadTime
+  while (nextBeatTime < currentTime + scheduleAheadTime) {
+    // Only play drums if people are present
+    if (people.length > 0) {
+      const beatInBar = currentBeat % 4; // 0-3 (beat in 4-beat bar)
+      const currentPattern = drumPatterns[currentPatternIndex].pattern;
+      const patternLength = currentPattern.length;
+      const patternIndex = currentBeat % patternLength;
+
+      // Play drum based on pattern
+      const hit = currentPattern[patternIndex];
+      if (hit === 'K') {
+        playKick(nextBeatTime);
+      } else if (hit === 'k') {
+        // Softer kick (ghost note)
+        playKick(nextBeatTime, 0.4); // 40% volume
+      } else if (hit === 'S') {
+        playSnare(nextBeatTime);
+      }
+      // '-' = rest, don't play anything
+
+      // Log chord changes and pattern switches (every 4 beats)
+      if (beatInBar === 0) {
+        const chordNum = Math.floor(currentBeat / 4) % 4;
+        const chordNames = ['I', 'II', 'III', 'IV'];
+
+        // Check if we should switch pattern
+        const barNum = Math.floor(currentBeat / 4);
+        if (barNum > 0 && barNum % BARS_PER_PATTERN === 0 && beatInBar === 0) {
+          // Switch to random pattern (different from current)
+          const oldIndex = currentPatternIndex;
+          do {
+            currentPatternIndex = Math.floor(Math.random() * drumPatterns.length);
+          } while (currentPatternIndex === oldIndex && drumPatterns.length > 1);
+
+          console.log(`🥁 Pattern: ${drumPatterns[currentPatternIndex].name} | Chord: ${chordNames[chordNum]} | BPM: ${Math.round(currentBPM)}`);
+        } else {
+          console.log(`🎵 Chord: ${chordNames[chordNum]} | BPM: ${Math.round(currentBPM)}`);
+        }
+      }
+    }
+
+    nextBeatTime += BEAT_DURATION_SEC;
+    currentBeat++;
+
+    // Update BPM every beat based on movement
+    updateBPM();
+  }
+
+  // Schedule next check
+  setTimeout(scheduleDrums, 25); // Check every 25ms
+}
+
+// Start drum scheduler
+function startDrumScheduler() {
+  if (isSchedulerRunning) return;
+
+  isSchedulerRunning = true;
+  nextBeatTime = audioContext.currentTime;
+  currentBeat = 0;
+
+  scheduleDrums();
+  console.log('🥁 Drum scheduler started');
+}
+
+// Stop drum scheduler
+function stopDrumScheduler() {
+  isSchedulerRunning = false;
 }
 
 // Simple Perlin-like noise
