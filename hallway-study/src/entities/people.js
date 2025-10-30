@@ -1,9 +1,9 @@
 // ===== People simulation =====
 import * as THREE from 'three';
-import { peopleSettings } from './config.js';
-import { scene } from './scene.js';
+import { peopleSettings } from '../core/config.js';
+import { scene } from '../core/scene.js';
 import { hall } from './hallway.js';
-import { isSliceVisibleToCamera } from './visibility.js';
+import { isSliceVisibleToCamera } from '../systems/visibility.js';
 
 let nextPersonId = 1;
 
@@ -90,11 +90,13 @@ export class Person {
     const boxMaterial = new THREE.LineBasicMaterial({ color: 0xffff00, linewidth: 2 });
     this.boundingBox = new THREE.LineSegments(boxEdges, boxMaterial);
     this.boundingBox.position.y = boxHeight / 2;
+    this.boundingBox.layers.set(1); // Hide from preview cameras
     this.group.add(this.boundingBox);
 
     // Create label sprite
     this.label = this.createLabel();
     this.label.position.y = this.height + 0.3; // Above the person
+    this.label.layers.set(1); // Hide from preview cameras
     this.group.add(this.label);
 
     this.visible = false;

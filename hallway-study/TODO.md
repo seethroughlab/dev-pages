@@ -1,1 +1,3 @@
 - Agents are still sometimes appearing right in the middle of the floor when they are spawned. 
+- Add a dropdown to select different camera configurations: 2-cam, 3-cam stagerred, etc.
+- I want to make the floor visuals a little more flashy. What ther enhancements can we add to make it a little more exciting? Matbe a fluidsimulation? 

@@ -1,6 +1,6 @@
 // ===== Projector nodes =====
 import * as THREE from 'three';
-import { scene } from './scene.js';
+import { scene } from '../core/scene.js';
 import { hall } from './hallway.js';
 
 export class ProjectorNode {

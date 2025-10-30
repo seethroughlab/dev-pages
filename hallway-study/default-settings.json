@@ -1,0 +1,50 @@
+{
+  "heatmap": {
+    "cell": 1
+  },
+  "people": {
+    "enabled": true,
+    "count": 7
+  },
+  "display": {
+    "showProjectors": true
+  },
+  "cameras": [
+    {
+      "name": "Cam A",
+      "pos": [
+        0,
+        3.2,
+        -2.25
+      ],
+      "yaw": 0,
+      "pitch": 28,
+      "roll": 0,
+      "end": "near"
+    },
+    {
+      "name": "Cam B",
+      "pos": [
+        0,
+        3.1,
+        2.4
+      ],
+      "yaw": 180,
+      "pitch": -28,
+      "roll": 0,
+      "end": "far"
+    }
+  ],
+  "orbitCamera": {
+    "position": [
+      10.200683930116696,
+      3.3880980253990245,
+      -2.0754982257896306
+    ],
+    "target": [
+      -0.2429679654724147,
+      0.9403339591591199,
+      0.17971714817481269
+    ]
+  }
+}

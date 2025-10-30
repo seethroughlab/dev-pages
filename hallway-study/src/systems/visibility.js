@@ -1,7 +1,7 @@
 // ===== Frustum test (3D rectangular pyramid) & Visibility checks =====
 import * as THREE from 'three';
-import { raycastSettings } from './config.js';
-import { scene } from './scene.js';
+import { raycastSettings } from '../core/config.js';
+import { scene } from '../core/scene.js';
 
 export const raycaster = new THREE.Raycaster();
 export const successfulRaycasts = []; // Store successful raycasts for visualization

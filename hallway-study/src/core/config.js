@@ -8,8 +8,8 @@ export const defaults = {
 };
 
 export const peopleSettings = {
-  enabled: false,
-  count: 3
+  enabled: true,
+  count: 6
 };
 
 export const raycastSettings = {

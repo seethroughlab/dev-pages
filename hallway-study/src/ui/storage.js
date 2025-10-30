@@ -1,6 +1,6 @@
 // ===== Auto-save to localStorage & Import/Export =====
-import { defaults, peopleSettings, displaySettings } from './config.js';
-import { camera, controls } from './scene.js';
+import { defaults, peopleSettings, displaySettings } from '../core/config.js';
+import { camera, controls } from '../core/scene.js';
 
 // These will be set by main app
 let camerasArray = null;
@@ -147,7 +147,8 @@ export function importJSON(file, callbacks){
 
       const status = document.getElementById('status');
       if (status) {
-        status.textContent = 'Imported configuration.';
+        status.textContent = '✓ Settings imported';
+        setTimeout(() => { status.textContent = ''; }, 2000);
       }
 
       saveSettings(); // Save imported settings

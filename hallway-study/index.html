@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Hallway Coverage Planner — Three.js</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="css/styles.css">
 
   <!-- Import map for Three.js r180 -->
   <script type="importmap"> 
@@ -25,7 +25,7 @@
   <!-- Left Sidebar with collapsible panels -->
   <div class="sidebar">
     <!-- Camera Specs Panel -->
-    <div class="panel">
+    <div class="panel collapsed" data-panel-id="camera-specs">
       <button class="panel-toggle" data-target="specs-content">
         <span class="toggle-icon">▼</span>
         <span class="toggle-text">Camera Specs</span>
@@ -79,7 +79,7 @@
     </div>
 
     <!-- Camera A Preview Panel -->
-    <div class="panel">
+    <div class="panel collapsed" data-panel-id="camera-a">
       <button class="panel-toggle" data-target="camA-content">
         <span class="toggle-icon">▼</span>
         <span class="toggle-text">Camera A</span>
@@ -90,7 +90,7 @@
     </div>
 
     <!-- Camera B Preview Panel -->
-    <div class="panel">
+    <div class="panel collapsed" data-panel-id="camera-b">
       <button class="panel-toggle" data-target="camB-content">
         <span class="toggle-icon">▼</span>
         <span class="toggle-text">Camera B</span>
@@ -101,7 +101,7 @@
     </div>
 
     <!-- Tracking JSON Debug Panel -->
-    <div class="panel">
+    <div class="panel collapsed" data-panel-id="tracking-data">
       <button class="panel-toggle" data-target="tracking-content">
         <span class="toggle-icon">▼</span>
         <span class="toggle-text">Tracking Data (24fps)</span>
@@ -113,6 +113,6 @@
   </div>
 
   <!-- Main application -->
-  <script type="module" src="app.js"></script>
+  <script type="module" src="src/core/app.js"></script>
 </body>
 </html>

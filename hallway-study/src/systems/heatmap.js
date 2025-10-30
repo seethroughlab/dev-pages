@@ -1,8 +1,8 @@
 // ===== Heatmap (floor coverage) =====
 import * as THREE from 'three';
-import { defaults } from './config.js';
-import { scene } from './scene.js';
-import { hall } from './hallway.js';
+import { defaults } from '../core/config.js';
+import { scene } from '../core/scene.js';
+import { hall } from '../entities/hallway.js';
 
 export const heat = { cells: [], group: null };
 
@@ -49,7 +49,7 @@ export function buildHeatmap() {
       const quad = new THREE.Mesh(geo, mat.clone());
       const x = -W/2 + (ix + 0.5) * cell;
       const z = (iz + 0.5) * cell + origin.z;
-      quad.position.set(x, 0.002, z);
+      quad.position.set(x, 0.01, z);
       heat.group.add(quad);
       heat.cells.push(quad);
     }

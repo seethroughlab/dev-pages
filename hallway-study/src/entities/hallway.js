@@ -1,8 +1,8 @@
 // ===== Hallway model =====
 import * as THREE from 'three';
-import { defaults, FT } from './config.js';
-import { scene } from './scene.js';
-import { createWavyGridTexture, floorTexture } from './floor-texture.js';
+import { defaults, FT } from '../core/config.js';
+import { scene } from '../core/scene.js';
+import { createWavyGridTexture, floorTexture } from '../systems/floor-texture.js';
 
 export const hall = { };
 

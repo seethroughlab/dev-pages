@@ -1,7 +1,7 @@
 // ===== GUI =====
 import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
-import { defaults, peopleSettings, raycastSettings, displaySettings, FT } from './config.js';
-import { scene } from './scene.js';
+import { defaults, peopleSettings, raycastSettings, displaySettings, FT } from '../core/config.js';
+import { scene } from '../core/scene.js';
 
 export let gui;
 let camerasArray = null;
@@ -56,45 +56,58 @@ export function setupGUI() {
     if (saveSettingsCallback) saveSettingsCallback();
   });
 
-  gui.add({reset: ()=>{
-    // Reset to defaults (hallway settings are hardcoded)
-    defaults.heatmap = { cell: 0.25 };
-    peopleSettings.enabled = false;
-    peopleSettings.count = 3;
-    displaySettings.showProjectors = true;
-
-    // Apply projector visibility
-    if (projectorsArray) {
-      projectorsArray.forEach(proj => {
-        proj.group.visible = displaySettings.showProjectors;
-      });
+  const settingsFolder = gui.addFolder('Settings');
+  settingsFolder.add({exportSettings: ()=>{
+    // Use the global exportJSON function
+    if (window.exportJSON) {
+      window.exportJSON();
     }
+  }}, 'exportSettings').name('Export Settings');
 
-    // Remove camera folders from GUI first (everything after Heatmap and People Simulation)
-    const foldersToRemove = gui.folders.slice(2);
-    foldersToRemove.forEach(fd => gui.removeFolder(fd));
+  settingsFolder.add({importSettings: ()=>{
+    // Create a file input element
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file && window.importJSON) {
+        window.importJSON(file);
+      }
+    };
+    input.click();
+  }}, 'importSettings').name('Import Settings');
 
-    // Remove cameras from scene and clear array
-    if (camerasArray) {
-      camerasArray.slice().forEach(c => scene.remove(c.group));
-      camerasArray.length = 0;
+  settingsFolder.add({loadDefaults: async ()=>{
+    if (!confirm('Load default settings? This will reset all cameras and settings.')) return;
+
+    try {
+      const response = await fetch('./default-settings.json');
+      const data = await response.json();
+
+      // Use the global importJSON-like logic
+      if (window.loadDefaultSettings) {
+        window.loadDefaultSettings(data);
+      }
+    } catch(e) {
+      alert('Failed to load defaults: ' + e.message);
     }
+  }}, 'loadDefaults').name('Load Defaults');
 
-    // Create new default cameras
-    if (seedCamerasCallback) seedCamerasCallback();
+  gui.add({reset: async ()=>{
+    if (!confirm('Reset to default settings?')) return;
 
-    // Add camera GUI folders
-    if (camerasArray && addCameraCallback) {
-      camerasArray.forEach(cam => addCameraToGUI(cam));
+    try {
+      const response = await fetch('./default-settings.json');
+      const data = await response.json();
+
+      // Use the global loadDefaultSettings function
+      if (window.loadDefaultSettings) {
+        window.loadDefaultSettings(data);
+      }
+    } catch(e) {
+      alert('Failed to reset: ' + e.message);
     }
-
-    // Rebuild scene elements
-    if (updateHeatmapCallback) updateHeatmapCallback();
-    if (createPeopleCallback) createPeopleCallback();
-    if (saveSettingsCallback) saveSettingsCallback();
-
-    // Refresh ALL GUI controllers to show reset values
-    gui.controllersRecursive().forEach(c => c.updateDisplay());
   }}, 'reset').name('Reset');
 
   return gui;
