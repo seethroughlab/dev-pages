@@ -1,5 +1,6 @@
 // ===== Wavy grid texture for floor projections =====
 import * as THREE from 'three';
+import { getFFTData } from '../entities/people.js';
 
 export let floorTextureCanvas, floorTextureCtx, floorTexture;
 
@@ -236,10 +237,25 @@ export function updateWavyGridTexture(time, deltaTime, hall, people) {
 
   // ===== REACTIVE NEON GRID WITH DYNAMIC COLORS =====
 
-  // Helper to get color based on activity (velocity magnitude)
+  // Get FFT data for audio reactivity
+  const fftData = getFFTData();
+  let audioEnergyBoost = 0;
+  if (fftData) {
+    // Calculate overall audio energy
+    let totalEnergy = 0;
+    for (let i = 0; i < fftData.length; i++) {
+      totalEnergy += fftData[i];
+    }
+    audioEnergyBoost = (totalEnergy / fftData.length / 255.0) * 0.5; // 0-0.5 boost
+  }
+
+  // Helper to get color based on activity (velocity magnitude) and audio
   function getLineColor(velocity, displacement) {
     // EXTREMELY sensitive - amplify the activity heavily
-    const activity = Math.min(1, Math.abs(velocity) * 50.0 + Math.abs(displacement) * 2.0);
+    let activity = Math.min(1, Math.abs(velocity) * 50.0 + Math.abs(displacement) * 2.0);
+
+    // Boost activity based on audio energy
+    activity = Math.min(1, activity + audioEnergyBoost);
 
     // Color gradient: calm (deep blue) -> active (bright cyan -> white)
     if (activity < 0.15) {
@@ -378,6 +394,102 @@ export function updateWavyGridTexture(time, deltaTime, hall, people) {
 
   // Reset alpha
   ctx.globalAlpha = 1.0;
+
+  // ===== RENDER FFT SPECTRUM ANALYZER =====
+  if (fftData) {
+    const numBars = Math.min(128, fftData.length); // Use first 128 bins
+    const barWidth = canvas.width / numBars;
+    const maxBarHeight = canvas.height * 0.15; // Max 15% of canvas height
+
+    // Draw spectrum at the bottom of the canvas
+    ctx.globalAlpha = 0.6;
+
+    for (let i = 0; i < numBars; i++) {
+      const value = fftData[i] / 255.0; // Normalize to 0-1
+      const barHeight = value * maxBarHeight;
+      const x = i * barWidth;
+      const y = canvas.height - barHeight;
+
+      // Color based on frequency (low = red, mid = cyan, high = magenta)
+      let r, g, b;
+      if (i < numBars / 3) {
+        // Low frequencies: Red to Orange
+        const t = (i / (numBars / 3));
+        r = 255;
+        g = Math.floor(t * 150);
+        b = 50;
+      } else if (i < 2 * numBars / 3) {
+        // Mid frequencies: Cyan
+        const t = ((i - numBars / 3) / (numBars / 3));
+        r = Math.floor(100 + t * 70);
+        g = Math.floor(200 + t * 55);
+        b = 255;
+      } else {
+        // High frequencies: Magenta to White
+        const t = ((i - 2 * numBars / 3) / (numBars / 3));
+        r = Math.floor(200 + t * 55);
+        g = Math.floor(100 + t * 155);
+        b = 255;
+      }
+
+      // Draw bar with gradient
+      const gradient = ctx.createLinearGradient(x, y, x, canvas.height);
+      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${0.8 * value})`);
+      gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${0.3 * value})`);
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x, y, barWidth - 1, barHeight);
+    }
+
+    // Add glow effect on top
+    ctx.globalAlpha = 0.3;
+    ctx.globalCompositeOperation = 'lighter';
+
+    for (let i = 0; i < numBars; i++) {
+      const value = fftData[i] / 255.0;
+      const barHeight = value * maxBarHeight;
+      const x = i * barWidth;
+      const y = canvas.height - barHeight;
+
+      // Glow color
+      let r, g, b;
+      if (i < numBars / 3) {
+        r = 255; g = 150; b = 50;
+      } else if (i < 2 * numBars / 3) {
+        r = 170; g = 255; b = 255;
+      } else {
+        r = 255; g = 255; b = 255;
+      }
+
+      const glowGradient = ctx.createRadialGradient(
+        x + barWidth / 2, y, 0,
+        x + barWidth / 2, y, barWidth * 2
+      );
+      glowGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${0.6 * value})`);
+      glowGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+      ctx.fillStyle = glowGradient;
+      ctx.fillRect(x - barWidth, y - 20, barWidth * 3, 30);
+    }
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1.0;
+
+    // Use overall audio energy to modulate grid brightness
+    let totalEnergy = 0;
+    for (let i = 0; i < fftData.length; i++) {
+      totalEnergy += fftData[i];
+    }
+    const avgEnergy = totalEnergy / fftData.length / 255.0;
+
+    // Add energy-reactive overlay to grid
+    if (avgEnergy > 0.1) {
+      ctx.globalAlpha = avgEnergy * 0.15;
+      ctx.fillStyle = `rgb(170, 240, 255)`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1.0;
+    }
+  }
 
   // ===== RENDER PARTICLES =====
   if (particleState.enabled && particleState.particles.length > 0) {

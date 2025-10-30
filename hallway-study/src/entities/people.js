@@ -11,6 +11,8 @@ let nextPersonId = 1;
 let audioContext = null;
 let masterGain = null;
 let reverbNode = null;
+let analyserNode = null;
+let fftData = null;
 
 function initAudio() {
   if (audioContext) return;
@@ -19,15 +21,44 @@ function initAudio() {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     masterGain = audioContext.createGain();
     masterGain.gain.value = 0.3; // Soft volume
-    masterGain.connect(audioContext.destination);
+
+    // Create analyser for FFT visualization
+    analyserNode = audioContext.createAnalyser();
+    analyserNode.fftSize = 512; // 256 frequency bins
+    analyserNode.smoothingTimeConstant = 0.8; // Smooth out the data
+    fftData = new Uint8Array(analyserNode.frequencyBinCount);
+
+    // Connect: masterGain -> analyser -> destination
+    masterGain.connect(analyserNode);
+    analyserNode.connect(audioContext.destination);
 
     // Create simple reverb using multiple delays
     reverbNode = createSimpleReverb();
 
-    console.log('🎵 Audio initialized - musical floor activated!');
+    // Initialize analysers for any existing people
+    people.forEach(person => {
+      if (!person.analyser) {
+        person.analyser = audioContext.createAnalyser();
+        person.analyser.fftSize = 64;
+        person.analyser.smoothingTimeConstant = 0.7;
+        person.fftData = new Uint8Array(person.analyser.frequencyBinCount);
+      }
+    });
+
+    // Start metronome
+    startMetronome();
+
+    console.log('🎵 Audio initialized - musical floor activated with FFT analyzer!');
   } catch (e) {
     console.error('Failed to initialize audio:', e);
   }
+}
+
+// Export FFT data getter
+export function getFFTData() {
+  if (!analyserNode || !fftData) return null;
+  analyserNode.getByteFrequencyData(fftData);
+  return fftData;
 }
 
 function createSimpleReverb() {
@@ -77,25 +108,109 @@ if (typeof window !== 'undefined') {
   window.addEventListener('keydown', initOnInteraction, { once: true });
 }
 
-// C# Major scale frequencies (C#3 to C#5)
-const cSharpScale = [
-  138.59, // C#3
-  155.56, // D#3
-  174.61, // F3 (E#)
-  185.00, // F#3
-  207.65, // G#3
-  233.08, // A#3
-  261.63, // C4 (B#)
-  277.18, // C#4
-  311.13, // D#4
-  349.23, // F4 (E#)
-  369.99, // F#4
-  415.30, // G#4
-  466.16, // A#4
-  523.25  // C5 (B#)
+// Musical scales - different keys and modes for variety
+const scales = [
+  {
+    name: 'C# Major',
+    notes: [138.59, 155.56, 174.61, 185.00, 207.65, 233.08, 261.63, 277.18, 311.13, 349.23, 369.99, 415.30, 466.16, 523.25]
+  },
+  {
+    name: 'D Minor (Natural)',
+    notes: [146.83, 164.81, 174.61, 196.00, 220.00, 233.08, 261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 466.16, 523.25]
+  },
+  {
+    name: 'E Major',
+    notes: [164.81, 185.00, 207.65, 220.00, 246.94, 277.18, 311.13, 329.63, 369.99, 415.30, 440.00, 493.88, 554.37, 622.25]
+  },
+  {
+    name: 'F# Minor (Harmonic)',
+    notes: [185.00, 207.65, 220.00, 246.94, 277.18, 293.66, 349.23, 369.99, 415.30, 440.00, 493.88, 554.37, 587.33, 698.46]
+  },
+  {
+    name: 'A Major',
+    notes: [220.00, 246.94, 277.18, 293.66, 329.63, 369.99, 415.30, 440.00, 493.88, 554.37, 587.33, 659.25, 739.99, 830.61]
+  },
+  {
+    name: 'C Major Pentatonic',
+    notes: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99]
+  },
+  {
+    name: 'Bb Major',
+    notes: [116.54, 130.81, 146.83, 155.56, 174.61, 196.00, 220.00, 233.08, 261.63, 293.66, 311.13, 349.23, 392.00, 440.00]
+  },
+  {
+    name: 'G Minor (Melodic)',
+    notes: [196.00, 220.00, 233.08, 261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 466.16, 523.25, 587.33, 659.25, 739.99]
+  }
 ];
 
-function playPluck(frequency, xPos, zPos, hallwayWidth, hallwayLength) {
+// Track current scale and rotation
+let currentScaleIndex = 0;
+let scaleChangeTime = 0;
+const SCALE_CHANGE_INTERVAL = 10; // seconds
+
+// Metronome state
+let metronomeInterval = null;
+const METRONOME_BPM = 90;
+const METRONOME_INTERVAL_MS = (60 / METRONOME_BPM) * 1000;
+
+// Instrument types with different characteristics
+const instrumentTypes = [
+  { name: 'Sharp Pluck', attack: 0.001, decay: 0.2, sustain: 0, release: 0.1, waveform: 'triangle' },
+  { name: 'Soft Pad', attack: 0.3, decay: 0.4, sustain: 0.6, release: 0.8, waveform: 'sine' },
+  { name: 'Bright Bell', attack: 0.005, decay: 0.6, sustain: 0.2, release: 0.4, waveform: 'square' },
+  { name: 'Warm Bass', attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.3, waveform: 'sawtooth' },
+  { name: 'Hollow Flute', attack: 0.05, decay: 0.5, sustain: 0.4, release: 0.6, waveform: 'sine' },
+  { name: 'Percussive Hit', attack: 0.001, decay: 0.15, sustain: 0, release: 0.05, waveform: 'square' },
+  { name: 'String Pluck', attack: 0.002, decay: 0.8, sustain: 0.1, release: 0.5, waveform: 'sawtooth' },
+  { name: 'Synth Lead', attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.3, waveform: 'sawtooth' },
+  { name: 'Mellow Organ', attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.7, waveform: 'triangle' },
+  { name: 'Glass Chime', attack: 0.001, decay: 1.2, sustain: 0, release: 0.2, waveform: 'sine' }
+];
+
+// Generate unique instrument for a person ID
+function generateInstrument(personId) {
+  // Use person ID as seed for deterministic randomness
+  const seed = personId * 2654435761; // Large prime for better distribution
+
+  // Create a seeded random function
+  const random = (min = 0, max = 1) => {
+    const x = Math.sin(seed + min * 100 + max * 1000) * 10000;
+    return min + (x - Math.floor(x)) * (max - min);
+  };
+
+  // Pick a base instrument type
+  const baseType = instrumentTypes[personId % instrumentTypes.length];
+
+  // Generate unique variations
+  return {
+    name: baseType.name,
+    waveform: baseType.waveform,
+    attack: baseType.attack * (0.5 + random(0, 1)),
+    decay: baseType.decay * (0.5 + random(0, 1.5)),
+    sustain: baseType.sustain,
+    release: baseType.release * (0.5 + random(0, 1.5)),
+
+    // Harmonic complexity
+    numOscillators: Math.floor(1 + random(0, 3)), // 1-3 oscillators
+    detuneAmount: random(0, 15), // 0-15 cents detune
+
+    // Filter characteristics
+    useFilter: random() > 0.5,
+    filterFreq: random(300, 4000),
+    filterQ: random(1, 10),
+
+    // Vibrato
+    vibratoRate: random(3, 8), // 3-8 Hz
+    vibratoDepth: random(0.5, 4), // 0.5-4 cents
+
+    // Volume and brightness
+    brightness: random(0.3, 1.0), // Affects harmonic content
+    baseVolume: random(0.3, 0.5)
+  };
+}
+
+function playPluck(frequency, xPos, zPos, hallwayWidth, hallwayLength, instrument, personAnalyser) {
   if (!audioContext) initAudio();
 
   const now = audioContext.currentTime;
@@ -104,67 +219,72 @@ function playPluck(frequency, xPos, zPos, hallwayWidth, hallwayLength) {
   const xRatio = (xPos + hallwayWidth / 2) / hallwayWidth; // 0 (left) to 1 (right)
   const zRatio = zPos / hallwayLength; // 0 (near end) to 1 (far end)
 
-  // ===== X-AXIS: TIMBRE MORPHING =====
-  // Left → Right: triangle → sawtooth → square, percussive → sustained, single → chorused
-
-  // Waveform selection
-  let waveType = 'triangle';
-  if (xRatio > 0.66) {
-    waveType = 'square';
-  } else if (xRatio > 0.33) {
-    waveType = 'sawtooth';
-  }
-
-  // Envelope timing (attack and decay based on X position)
-  const attackTime = 0.005 + xRatio * 0.015; // 5ms (left) to 20ms (right)
-  const decayTime = 0.3 + xRatio * 0.7; // 300ms (left) to 1000ms (right)
-  const peakGain = 0.4 - xRatio * 0.1; // Slightly quieter on right due to longer sustain
-
-  // Number of oscillators (harmonic richness)
-  const numOscillators = Math.floor(1 + xRatio * 2); // 1 (left) to 3 (right)
-  const detuneAmount = xRatio * 8; // 0 (left) to 8 cents (right)
-
   // ===== Z-AXIS: REVERB AMOUNT =====
   // More reverb in middle of hallway, less at ends
   const distanceFromCenter = Math.abs(zRatio - 0.5);
   const reverbAmount = 1 - (distanceFromCenter * 2); // 1 at center, 0 at ends
   const reverbMix = reverbAmount * 0.5; // Max 50% wet
 
-  // ===== CREATE SOUND =====
+  // ===== X-AXIS: SUBTLE TIMBRE MODULATION =====
+  // Modulate instrument characteristics slightly based on X position
+  const xModulation = (xRatio - 0.5) * 2; // -1 (left) to 1 (right)
+
+  // ===== CREATE SOUND USING PERSON'S UNIQUE INSTRUMENT =====
   const oscillators = [];
   const gains = [];
 
-  for (let i = 0; i < numOscillators; i++) {
+  for (let i = 0; i < instrument.numOscillators; i++) {
     const osc = audioContext.createOscillator();
-    osc.type = waveType;
+    osc.type = instrument.waveform;
 
-    // Detune for chorus effect (right side only)
-    const detune = i === 0 ? 0 : (i - 1) * detuneAmount * (i % 2 === 0 ? 1 : -1);
+    // Detune for chorus effect
+    const detune = i === 0 ? 0 : (i - 1) * instrument.detuneAmount * (i % 2 === 0 ? 1 : -1);
     osc.frequency.value = frequency;
-    osc.detune.value = detune;
+    osc.detune.value = detune + xModulation * 5; // Slight X-axis pitch bend
 
-    // Individual envelope for this oscillator
+    // Create envelope based on instrument ADSR
     const env = audioContext.createGain();
     env.gain.value = 0;
     env.gain.setValueAtTime(0, now);
-    env.gain.linearRampToValueAtTime(peakGain / numOscillators, now + attackTime);
-    env.gain.exponentialRampToValueAtTime(0.001, now + decayTime);
+    env.gain.linearRampToValueAtTime(instrument.baseVolume / instrument.numOscillators, now + instrument.attack);
+
+    if (instrument.sustain > 0) {
+      // ADSR envelope (with sustain)
+      env.gain.linearRampToValueAtTime(instrument.sustain * instrument.baseVolume / instrument.numOscillators, now + instrument.attack + instrument.decay);
+      env.gain.linearRampToValueAtTime(0.001, now + instrument.attack + instrument.decay + instrument.release);
+    } else {
+      // AR envelope (no sustain - percussive)
+      env.gain.exponentialRampToValueAtTime(0.001, now + instrument.attack + instrument.decay);
+    }
 
     osc.connect(env);
     oscillators.push(osc);
     gains.push(env);
   }
 
-  // Add subtle vibrato (less on left, more on right)
+  // Apply filter if instrument uses one
+  let filterNode = null;
+  if (instrument.useFilter) {
+    filterNode = audioContext.createBiquadFilter();
+    filterNode.type = 'lowpass';
+    filterNode.frequency.value = instrument.filterFreq * (1 + xModulation * 0.3); // X-axis modulates filter
+    filterNode.Q.value = instrument.filterQ;
+  }
+
+  // Add vibrato based on instrument characteristics
   const vibrato = audioContext.createOscillator();
-  vibrato.frequency.value = 5;
+  vibrato.frequency.value = instrument.vibratoRate;
   const vibratoGain = audioContext.createGain();
-  vibratoGain.gain.value = 1 + xRatio * 2; // 1 cent (left) to 3 cents (right)
+  vibratoGain.gain.value = instrument.vibratoDepth;
 
   vibrato.connect(vibratoGain);
   oscillators.forEach(osc => {
     vibratoGain.connect(osc.frequency);
   });
+
+  // Create person-specific gain node for FFT analysis
+  const personGain = audioContext.createGain();
+  personGain.gain.value = 1.0;
 
   // Create dry/wet mixer for reverb
   const dryGain = audioContext.createGain();
@@ -172,23 +292,105 @@ function playPluck(frequency, xPos, zPos, hallwayWidth, hallwayLength) {
   dryGain.gain.value = 1 - reverbMix;
   wetGain.gain.value = reverbMix;
 
-  // Connect all oscillators to dry/wet paths
+  // Connect signal path through person's analyser
   gains.forEach(env => {
-    env.connect(dryGain);
-    env.connect(wetGain);
+    if (filterNode) {
+      env.connect(filterNode);
+    } else {
+      env.connect(personGain);
+    }
   });
+
+  if (filterNode) {
+    filterNode.connect(personGain);
+  }
+
+  // Connect person gain to their analyser (if available) and then to dry/wet
+  if (personAnalyser) {
+    personGain.connect(personAnalyser);
+  }
+  personGain.connect(dryGain);
+  personGain.connect(wetGain);
 
   dryGain.connect(masterGain);
   wetGain.connect(reverbNode);
 
+  // Calculate total duration
+  const totalDuration = instrument.attack + instrument.decay + instrument.release;
+  const stopTime = now + totalDuration + 0.1;
+
   // Start all oscillators
-  const stopTime = now + decayTime + 0.1;
   oscillators.forEach(osc => {
     osc.start(now);
     osc.stop(stopTime);
   });
   vibrato.start(now);
   vibrato.stop(stopTime);
+}
+
+// Metronome beat function
+function playMetronomeBeat(beatNumber) {
+  if (!audioContext) return;
+
+  const now = audioContext.currentTime;
+
+  // Different sound for downbeat (1) vs offbeats (2, 3, 4)
+  const isDownbeat = beatNumber % 4 === 1;
+
+  if (isDownbeat) {
+    // Kick drum sound (downbeat)
+    const kickOsc = audioContext.createOscillator();
+    kickOsc.frequency.setValueAtTime(150, now);
+    kickOsc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+
+    const kickEnv = audioContext.createGain();
+    kickEnv.gain.setValueAtTime(0.4, now);
+    kickEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+    kickOsc.connect(kickEnv);
+    kickEnv.connect(masterGain);
+
+    kickOsc.start(now);
+    kickOsc.stop(now + 0.15);
+  } else {
+    // Soft click (offbeats)
+    const clickOsc = audioContext.createOscillator();
+    clickOsc.frequency.value = 800;
+    clickOsc.type = 'square';
+
+    const clickEnv = audioContext.createGain();
+    clickEnv.gain.setValueAtTime(0.08, now);
+    clickEnv.gain.exponentialRampToValueAtTime(0.01, now + 0.03);
+
+    clickOsc.connect(clickEnv);
+    clickEnv.connect(masterGain);
+
+    clickOsc.start(now);
+    clickOsc.stop(now + 0.03);
+  }
+}
+
+// Start metronome
+function startMetronome() {
+  if (metronomeInterval) return; // Already running
+
+  let beatCount = 1;
+  playMetronomeBeat(beatCount); // Play first beat immediately
+
+  metronomeInterval = setInterval(() => {
+    beatCount++;
+    playMetronomeBeat(beatCount);
+  }, METRONOME_INTERVAL_MS);
+
+  console.log('🥁 Metronome started at ' + METRONOME_BPM + ' BPM');
+}
+
+// Stop metronome
+function stopMetronome() {
+  if (metronomeInterval) {
+    clearInterval(metronomeInterval);
+    metronomeInterval = null;
+  }
 }
 
 // Simple Perlin-like noise
@@ -214,6 +416,19 @@ export class Person {
     const { startZ = 0, speed = 0.5, xOffset = 0 } = opts;
 
     this.id = nextPersonId++;
+    this.instrument = generateInstrument(this.id); // Generate unique instrument for this person
+    console.log(`🎹 Person ${this.id} created with instrument: ${this.instrument.name} (${this.instrument.numOscillators} osc, filter: ${this.instrument.useFilter})`);
+
+    // Create personal audio analyser for FFT visualization
+    this.analyser = null;
+    this.fftData = null;
+    if (audioContext) {
+      this.analyser = audioContext.createAnalyser();
+      this.analyser.fftSize = 64; // 32 frequency bins (small for compact display)
+      this.analyser.smoothingTimeConstant = 0.7;
+      this.fftData = new Uint8Array(this.analyser.frequencyBinCount);
+    }
+
     this.crossedLines = new Set(); // Track which lines this person has crossed
     const personRadius = 0.225;
     this.radius = personRadius;
@@ -326,7 +541,7 @@ export class Person {
 
     // Text
     ctx.fillStyle = 'white';
-    ctx.font = 'Bold 24px monospace';
+    ctx.font = 'Bold 20px monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
 
@@ -335,8 +550,79 @@ export class Person {
     const boxHeight = this.height;
     const boxDepth = this.radius * 2;
 
-    const text = `ID:${this.id} [${this.xOffset.toFixed(2)},${worldZ.toFixed(2)}] [${boxWidth.toFixed(2)}×${boxHeight.toFixed(2)}×${boxDepth.toFixed(2)}]`;
-    ctx.fillText(text, 10, 10);
+    const text = `ID:${this.id} • ${this.instrument.name}`;
+    ctx.fillText(text, 10, 5);
+
+    // Position info on second line
+    ctx.font = '16px monospace';
+    const posText = `[${this.xOffset.toFixed(2)},${worldZ.toFixed(2)}] [${boxWidth.toFixed(2)}×${boxHeight.toFixed(2)}×${boxDepth.toFixed(2)}]`;
+    ctx.fillText(posText, 10, 28);
+
+    // ===== DRAW PERSONAL FFT SPECTRUM =====
+    if (this.analyser && this.fftData) {
+      this.analyser.getByteFrequencyData(this.fftData);
+
+      const numBars = this.fftData.length; // 32 bins
+      const barWidth = (canvas.width - 20) / numBars; // Leave 10px margin on each side
+      const maxBarHeight = 40; // 40px max height
+      const startY = 50; // Position below text
+      const baseY = startY + maxBarHeight;
+
+      // Draw FFT bars
+      for (let i = 0; i < numBars; i++) {
+        const value = this.fftData[i] / 255.0; // Normalize to 0-1
+        const barHeight = value * maxBarHeight;
+        const x = 10 + i * barWidth;
+        const y = baseY - barHeight;
+
+        // Color based on frequency (same scheme as floor)
+        let r, g, b;
+        if (i < numBars / 3) {
+          // Low frequencies: Red to Orange
+          const t = (i / (numBars / 3));
+          r = 255;
+          g = Math.floor(t * 150);
+          b = 50;
+        } else if (i < 2 * numBars / 3) {
+          // Mid frequencies: Cyan
+          const t = ((i - numBars / 3) / (numBars / 3));
+          r = Math.floor(100 + t * 70);
+          g = Math.floor(200 + t * 55);
+          b = 255;
+        } else {
+          // High frequencies: Magenta to White
+          const t = ((i - 2 * numBars / 3) / (numBars / 3));
+          r = Math.floor(200 + t * 55);
+          g = Math.floor(100 + t * 155);
+          b = 255;
+        }
+
+        // Draw bar
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.8})`;
+        ctx.fillRect(x, y, barWidth - 1, barHeight);
+
+        // Add glow on top
+        if (value > 0.1) {
+          const glowGradient = ctx.createRadialGradient(
+            x + barWidth / 2, y, 0,
+            x + barWidth / 2, y, barWidth * 1.5
+          );
+          glowGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${0.6 * value})`);
+          glowGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+          ctx.fillStyle = glowGradient;
+          ctx.fillRect(x - barWidth / 2, y - 5, barWidth * 2, 10);
+        }
+      }
+
+      // Draw baseline
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(10, baseY);
+      ctx.lineTo(canvas.width - 10, baseY);
+      ctx.stroke();
+    }
 
     this.label.material.map.needsUpdate = true;
   }
@@ -429,13 +715,14 @@ export class Person {
           if (lineIdx >= 0 && lineIdx < numLines && !this.crossedLines.has(lineIdx)) {
             this.crossedLines.add(lineIdx);
 
-            // Map line position to note in C# scale
+            // Map line position to note in current scale
             // Spread the notes across the hallway length
-            const noteIdx = Math.floor((lineIdx / numLines) * cSharpScale.length);
-            const frequency = cSharpScale[noteIdx];
+            const currentScale = scales[currentScaleIndex].notes;
+            const noteIdx = Math.floor((lineIdx / numLines) * currentScale.length);
+            const frequency = currentScale[noteIdx];
 
-            // Play the pluck sound with position-based timbre and reverb
-            playPluck(frequency, this.xOffset, this.z, W, L);
+            // Play the pluck sound with position-based timbre, reverb, and unique instrument
+            playPluck(frequency, this.xOffset, this.z, W, L, this.instrument, this.analyser);
           }
         }
       }
@@ -537,6 +824,17 @@ function spawnPersonAtEnd(atNearEnd) {
 
 export function updatePeople(deltaTime, cameras) {
   if (!peopleSettings.enabled || !hall.bounds) return;
+
+  // Update scale rotation timer
+  scaleChangeTime += deltaTime;
+  if (scaleChangeTime >= SCALE_CHANGE_INTERVAL) {
+    scaleChangeTime = 0;
+    currentScaleIndex = (currentScaleIndex + 1) % scales.length;
+    console.log(`🎵 Scale changed to: ${scales[currentScaleIndex].name}`);
+
+    // Clear all crossed lines so people can trigger notes again in the new scale
+    people.forEach(p => p.crossedLines.clear());
+  }
 
   // Update existing people
   people.forEach(p => p.update(deltaTime, cameras));
