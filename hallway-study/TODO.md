@@ -1,0 +1,1 @@
+- Agents are still sometimes appearing right in the middle of the floor when they are spawned. 
