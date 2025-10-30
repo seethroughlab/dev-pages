@@ -20,7 +20,12 @@ function initAudio() {
   try {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.3; // Soft volume
+
+    // Start at zero and fade in over 3 seconds
+    masterGain.gain.value = 0;
+    const now = audioContext.currentTime;
+    masterGain.gain.setValueAtTime(0, now);
+    masterGain.gain.linearRampToValueAtTime(0.3, now + 3.0); // 3 second fade-in
 
     // Create analyser for FFT visualization
     analyserNode = audioContext.createAnalyser();
@@ -45,10 +50,15 @@ function initAudio() {
       }
     });
 
-    // Start metronome
-    startMetronome();
+    // Set musical time start for quantization
+    musicalTimeStart = audioContext.currentTime + 1.0; // Start 1 second from now
 
-    console.log('🎵 Audio initialized - musical floor activated with FFT analyzer!');
+    // Delay metronome start by 1 second, let it fade in naturally
+    setTimeout(() => {
+      startMetronome();
+      console.log('🎵 Audio initialized - musical floor activated with FFT analyzer!');
+    }, 1000);
+
   } catch (e) {
     console.error('Failed to initialize audio:', e);
   }
@@ -100,12 +110,14 @@ function createSimpleReverb() {
 // Initialize audio on first user interaction
 if (typeof window !== 'undefined') {
   const initOnInteraction = () => {
+    console.log('🔊 User interaction detected - initializing audio...');
     initAudio();
     window.removeEventListener('click', initOnInteraction);
     window.removeEventListener('keydown', initOnInteraction);
   };
   window.addEventListener('click', initOnInteraction, { once: true });
   window.addEventListener('keydown', initOnInteraction, { once: true });
+  console.log('🎧 Waiting for user interaction to start audio (click or keypress)...');
 }
 
 // Musical scales - different keys and modes for variety
@@ -153,6 +165,63 @@ const SCALE_CHANGE_INTERVAL = 10; // seconds
 let metronomeInterval = null;
 const METRONOME_BPM = 90;
 const METRONOME_INTERVAL_MS = (60 / METRONOME_BPM) * 1000;
+const BEAT_DURATION_SEC = 60 / METRONOME_BPM;
+const SIXTEENTH_NOTE_SEC = BEAT_DURATION_SEC / 4; // 4 sixteenth notes per beat
+
+// Musical time tracking
+let musicalTimeStart = 0; // When audio started (audioContext time)
+let currentBeat = 0;
+
+// Chord progressions for each scale (4 chords, each lasting 4 beats = 16 beats total)
+// Each chord is defined as indices into the scale
+const chordProgressions = [
+  // C# Major: I - V - vi - IV
+  [[0, 2, 4], [4, 6, 8], [5, 7, 9], [3, 5, 7]],
+  // D Minor: i - iv - VII - III
+  [[0, 2, 4], [3, 5, 7], [6, 8, 10], [2, 4, 6]],
+  // E Major: I - IV - V - I
+  [[0, 2, 4], [3, 5, 7], [4, 6, 8], [0, 2, 4]],
+  // F# Minor: i - VI - III - VII
+  [[0, 2, 4], [5, 7, 9], [2, 4, 6], [6, 8, 10]],
+  // A Major: I - V - vi - IV
+  [[0, 2, 4], [4, 6, 8], [5, 7, 9], [3, 5, 7]],
+  // C Major Pentatonic: Simple two-chord vamp
+  [[0, 2, 4], [2, 4, 6], [0, 2, 4], [2, 4, 6]],
+  // Bb Major: I - IV - V - I
+  [[0, 2, 4], [3, 5, 7], [4, 6, 8], [0, 2, 4]],
+  // G Minor: i - iv - v - i
+  [[0, 2, 4], [3, 5, 7], [4, 6, 8], [0, 2, 4]]
+];
+
+// Get current chord tones based on musical time
+function getCurrentChordTones() {
+  if (!audioContext || musicalTimeStart === 0) return [0, 2, 4, 7, 9]; // Default pentatonic
+
+  const currentTime = audioContext.currentTime - musicalTimeStart;
+
+  // Safety check: if time is negative, return default
+  if (currentTime < 0) return [0, 2, 4, 7, 9];
+
+  const currentBeat = (currentTime / BEAT_DURATION_SEC) % 16; // 16 beat cycle (4 chords × 4 beats)
+  const chordIndex = Math.floor(currentBeat / 4) % 4; // Which chord in the progression (ensure 0-3)
+
+  // Safety checks
+  if (!chordProgressions[currentScaleIndex]) {
+    console.warn('Invalid scale index:', currentScaleIndex);
+    return [0, 2, 4, 7, 9];
+  }
+
+  const progression = chordProgressions[currentScaleIndex];
+  const chord = progression[chordIndex];
+
+  if (!chord || !Array.isArray(chord)) {
+    console.warn('Invalid chord:', chord, 'at index:', chordIndex);
+    return [0, 2, 4, 7, 9];
+  }
+
+  // Return chord tones plus octave extensions for more note options
+  return [...chord, ...chord.map(n => n + 7), ...chord.map(n => n + 3.5).map(Math.floor)];
+}
 
 // Instrument types with different characteristics
 const instrumentTypes = [
@@ -210,10 +279,10 @@ function generateInstrument(personId) {
   };
 }
 
-function playPluck(frequency, xPos, zPos, hallwayWidth, hallwayLength, instrument, personAnalyser) {
+function playPluck(frequency, xPos, zPos, hallwayWidth, hallwayLength, instrument, personAnalyser, scheduledTime = null) {
   if (!audioContext) initAudio();
 
-  const now = audioContext.currentTime;
+  const now = scheduledTime !== null ? scheduledTime : audioContext.currentTime;
 
   // Normalize positions to 0-1 range
   const xRatio = (xPos + hallwayWidth / 2) / hallwayWidth; // 0 (left) to 1 (right)
@@ -375,11 +444,20 @@ function startMetronome() {
   if (metronomeInterval) return; // Already running
 
   let beatCount = 1;
+  currentBeat = 1;
   playMetronomeBeat(beatCount); // Play first beat immediately
 
   metronomeInterval = setInterval(() => {
     beatCount++;
+    currentBeat = beatCount;
     playMetronomeBeat(beatCount);
+
+    // Log chord changes (every 4 beats)
+    if (beatCount % 4 === 1) {
+      const chordNum = Math.floor((beatCount - 1) / 4) % 4;
+      const chordNames = ['I', 'II', 'III', 'IV'];
+      console.log(`🎵 Chord: ${chordNames[chordNum]} (beat ${beatCount})`);
+    }
   }, METRONOME_INTERVAL_MS);
 
   console.log('🥁 Metronome started at ' + METRONOME_BPM + ' BPM');
@@ -713,16 +791,45 @@ export class Person {
         // Play a note for each crossed line (only once per line)
         for (let lineIdx = start; lineIdx <= end; lineIdx++) {
           if (lineIdx >= 0 && lineIdx < numLines && !this.crossedLines.has(lineIdx)) {
-            this.crossedLines.add(lineIdx);
+            // Only trigger on every 6th line (reduces note density 6x)
+            if (lineIdx % 6 === 0) {
+              this.crossedLines.add(lineIdx);
 
-            // Map line position to note in current scale
-            // Spread the notes across the hallway length
-            const currentScale = scales[currentScaleIndex].notes;
-            const noteIdx = Math.floor((lineIdx / numLines) * currentScale.length);
-            const frequency = currentScale[noteIdx];
+              // ===== QUANTIZE TO NEAREST 16TH NOTE =====
+              if (!audioContext || musicalTimeStart === 0) continue;
 
-            // Play the pluck sound with position-based timbre, reverb, and unique instrument
-            playPluck(frequency, this.xOffset, this.z, W, L, this.instrument, this.analyser);
+              const currentTime = audioContext.currentTime;
+              const timeSinceStart = currentTime - musicalTimeStart;
+              const currentSixteenth = timeSinceStart / SIXTEENTH_NOTE_SEC;
+              const nextSixteenth = Math.ceil(currentSixteenth);
+              const quantizedTime = musicalTimeStart + (nextSixteenth * SIXTEENTH_NOTE_SEC);
+
+              // Only schedule if less than 1 beat away (prevent huge delays)
+              if (quantizedTime - currentTime > BEAT_DURATION_SEC) continue;
+
+              // ===== MAP TO CHORD TONES FOR HARMONY =====
+              const currentScale = scales[currentScaleIndex].notes;
+              const chordTones = getCurrentChordTones();
+
+              // Use X position to select chord tone (root, third, fifth, etc.)
+              // Use Z position to select octave/register
+              const xNorm = (this.xOffset + W/2) / W; // 0-1 across width
+              const zNorm = lineIdx / numLines; // 0-1 along length
+
+              // Map X position to chord degree (creates harmonies across width)
+              // 3 main chord tones: root (0), third (1), fifth (2)
+              const chordDegree = Math.floor(xNorm * 3); // 0, 1, or 2
+              const baseChordTone = chordTones[chordDegree] || chordTones[0];
+
+              // Map Z position to octave shift (so movement creates register changes, not linear scale)
+              const octaveShift = Math.floor(zNorm * 3); // 0, 1, or 2 octaves up
+              const scaleIdx = (baseChordTone + octaveShift * 7) % currentScale.length;
+
+              const frequency = currentScale[scaleIdx];
+
+              // Schedule the note at the quantized time
+              playPluck(frequency, this.xOffset, this.z, W, L, this.instrument, this.analyser, quantizedTime);
+            }
           }
         }
       }
