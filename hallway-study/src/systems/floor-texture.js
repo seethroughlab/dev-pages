@@ -18,7 +18,14 @@ export const particleState = {
 
 export function createWavyGridTexture() {
   floorTextureCanvas = document.createElement('canvas');
-  floorTextureCtx = floorTextureCanvas.getContext('2d');
+  floorTextureCtx = floorTextureCanvas.getContext('2d', {
+    alpha: false, // No transparency needed, improves performance
+    desynchronized: true // Hint for better performance
+  });
+
+  // Enable smooth rendering on the canvas itself
+  floorTextureCtx.imageSmoothingEnabled = true;
+  floorTextureCtx.imageSmoothingQuality = 'high';
 
   // Each projector: 1920x1200 WUXGA (landscape along hallway)
   // 3 projectors with ~15% overlap (288px) between adjacent projectors
@@ -62,6 +69,13 @@ export function createWavyGridTexture() {
   floorTexture = new THREE.CanvasTexture(floorTextureCanvas);
   floorTexture.wrapS = THREE.RepeatWrapping;
   floorTexture.wrapT = THREE.RepeatWrapping;
+
+  // Anti-aliasing settings to reduce blocky flickering
+  // Use mipmaps for better minification when zoomed out
+  floorTexture.minFilter = THREE.LinearMipmapLinearFilter; // Trilinear filtering
+  floorTexture.magFilter = THREE.LinearFilter; // Smooth magnification
+  floorTexture.generateMipmaps = true; // Enable mipmaps for smooth minification when zoomed out
+  floorTexture.anisotropy = 16; // Max anisotropic filtering for viewing at angles
 
   return floorTexture;
 }

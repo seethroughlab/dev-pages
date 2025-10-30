@@ -7,8 +7,8 @@
     "count": 3
   },
   "display": {
-    "showProjectors": true,
-    "showCameraFOV": true,
+    "showProjectors": false,
+    "showCameraFOV": false,
     "showHeatmap": false,
     "showDepthVisualization": true
   },
@@ -40,14 +40,14 @@
   ],
   "orbitCamera": {
     "position": [
-      -4.11630936045858,
-      9.769608458266156,
-      6.000311118124745
+      -4.023779164769564,
+      5.465218996456542,
+      -11.132443524336363
     ],
     "target": [
-      -0.8236326424221533,
-      0.7095556077968658,
-      0.379187411870991
+      1.6761495219118117,
+      1.1681038060053837,
+      -1.491453261100583
     ]
   }
 }
