@@ -13,6 +13,7 @@ let masterGain = null;
 let reverbNode = null;
 let analyserNode = null;
 let fftData = null;
+let audioEnabled = false; // Audio disabled by default
 
 function initAudio() {
   if (audioContext) return;
@@ -105,18 +106,26 @@ export function updateMusicInfoDisplay() {
   const musicInfoEl = document.querySelector('.music-info');
 
   if (keyEl && bpmEl) {
-    // Update key display
-    const currentScale = scales[currentScaleIndex];
-    keyEl.textContent = currentScale.name;
+    if (audioEnabled && audioContext && audioContext.state === 'running') {
+      // Update key display
+      const currentScale = scales[currentScaleIndex];
+      keyEl.textContent = currentScale.name;
 
-    // Update BPM display
-    bpmEl.textContent = Math.round(currentBPM);
+      // Update BPM display
+      bpmEl.textContent = Math.round(currentBPM);
 
-    // Add active class when audio is running
-    if (audioContext && audioContext.state === 'running' && musicInfoEl) {
-      musicInfoEl.classList.add('active');
-    } else if (musicInfoEl) {
-      musicInfoEl.classList.remove('active');
+      // Add active class when audio is running
+      if (musicInfoEl) {
+        musicInfoEl.classList.add('active');
+      }
+    } else {
+      // Show placeholder when audio is disabled
+      keyEl.textContent = '--';
+      bpmEl.textContent = '--';
+
+      if (musicInfoEl) {
+        musicInfoEl.classList.remove('active');
+      }
     }
   }
 }
@@ -164,22 +173,52 @@ function createSimpleReverb() {
   return reverbInput;
 }
 
-// Initialize audio on first user interaction
+// Export function to toggle audio
+export function toggleAudio() {
+  audioEnabled = !audioEnabled;
+
+  if (audioEnabled) {
+    console.log('🔊 Enabling audio...');
+
+    if (audioContext && audioContext.state === 'suspended') {
+      // Resume existing audio context
+      audioContext.resume().then(() => {
+        console.log('AudioContext resumed');
+        startDrumScheduler();
+        updateAudioStatus('🎵 Audio enabled', 'success');
+      });
+    } else {
+      // Initialize audio for the first time
+      initAudio();
+    }
+  } else {
+    console.log('🔇 Disabling audio...');
+
+    // Stop drum scheduler
+    stopDrumScheduler();
+
+    // Suspend audio context
+    if (audioContext && audioContext.state === 'running') {
+      audioContext.suspend().then(() => {
+        console.log('AudioContext suspended');
+      });
+    }
+
+    updateAudioStatus('Audio disabled', 'info');
+  }
+
+  return audioEnabled;
+}
+
+// Export function to check if audio is enabled
+export function isAudioEnabled() {
+  return audioEnabled;
+}
+
+// Initialize audio status display
 if (typeof window !== 'undefined') {
-  const initOnInteraction = () => {
-    console.log('🔊 User interaction detected - initializing audio...');
-    initAudio();
-    window.removeEventListener('click', initOnInteraction);
-    window.removeEventListener('keydown', initOnInteraction);
-  };
-  window.addEventListener('click', initOnInteraction, { once: true });
-  window.addEventListener('keydown', initOnInteraction, { once: true });
-
-  console.log('🎧 Waiting for user interaction to start audio (click or keypress)...');
-
-  // Show initial status after a brief delay (let page load)
   setTimeout(() => {
-    updateAudioStatus('Click anywhere to start audio', 'info');
+    updateAudioStatus('Audio disabled - click button to enable', 'info');
   }, 100);
 }
 
@@ -407,7 +446,7 @@ function generateInstrument(personId) {
 }
 
 function playPluck(frequency, xPos, zPos, hallwayWidth, hallwayLength, instrument, personAnalyser, scheduledTime = null) {
-  if (!audioContext) initAudio();
+  if (!audioEnabled || !audioContext) return;
 
   const now = scheduledTime !== null ? scheduledTime : audioContext.currentTime;
 
@@ -526,7 +565,7 @@ function playPluck(frequency, xPos, zPos, hallwayWidth, hallwayLength, instrumen
 
 // Kick drum sound
 function playKick(time, volumeMultiplier = 1.0) {
-  if (!audioContext) return;
+  if (!audioEnabled || !audioContext) return;
 
   const now = time || audioContext.currentTime;
 
@@ -572,7 +611,7 @@ function playKick(time, volumeMultiplier = 1.0) {
 
 // Snare drum sound
 function playSnare(time) {
-  if (!audioContext) return;
+  if (!audioEnabled || !audioContext) return;
 
   const now = time || audioContext.currentTime;
 

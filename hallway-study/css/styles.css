@@ -293,3 +293,40 @@ html, body {
 .music-info.active .music-bpm {
   animation: music-pulse 2s ease-in-out infinite;
 }
+
+/* Audio Toggle Button */
+.audio-toggle-btn {
+  appearance: none;
+  background: rgba(46, 133, 255, 0.15);
+  border: 2px solid rgba(46, 133, 255, 0.4);
+  border-radius: 12px;
+  padding: 12px 24px;
+  color: #58a6ff;
+  font: bold 14px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.audio-toggle-btn:hover {
+  background: rgba(46, 133, 255, 0.25);
+  border-color: rgba(46, 133, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+.audio-toggle-btn:active {
+  transform: translateY(0);
+}
+
+.audio-toggle-btn.enabled {
+  background: rgba(46, 160, 67, 0.15);
+  border-color: rgba(46, 160, 67, 0.4);
+  color: #3fb950;
+}
+
+.audio-toggle-btn.enabled:hover {
+  background: rgba(46, 160, 67, 0.25);
+  border-color: rgba(46, 160, 67, 0.6);
+}

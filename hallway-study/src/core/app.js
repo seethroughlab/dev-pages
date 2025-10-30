@@ -9,7 +9,7 @@ import { buildHeatmap, updateHeatmap, updateHeatmapVisibility, setPointInFrustum
 import { cameras, addCamera, seedCameras, setUpdateHeatmapCallback } from '../entities/camera-node.js';
 import { projectors, createProjectors } from '../entities/projector-node.js';
 import { pointInFrustum2D, updateRaycastVisualization } from '../systems/visibility.js';
-import { people, createPeople, updatePeople, generateTrackingJSON, updateMusicInfoDisplay } from '../entities/people.js';
+import { people, createPeople, updatePeople, generateTrackingJSON, updateMusicInfoDisplay, toggleAudio, isAudioEnabled } from '../entities/people.js';
 import { setupGUI, setCallbacks as setGUICallbacks, addCameraToGUI, gui } from '../ui/gui.js';
 import { saveSettings, loadSettings, exportJSON, importJSON, setCamerasArray as setStorageCameras, setProjectorsArray } from '../ui/storage.js';
 
@@ -216,6 +216,16 @@ document.querySelectorAll('.panel-toggle').forEach(toggle => {
     savePanelStates();
   });
 });
+
+// ===== Audio Toggle Button =====
+const audioToggleBtn = document.getElementById('audio-toggle');
+if (audioToggleBtn) {
+  audioToggleBtn.addEventListener('click', () => {
+    const enabled = toggleAudio();
+    audioToggleBtn.textContent = enabled ? 'Disable Audio' : 'Enable Audio';
+    audioToggleBtn.classList.toggle('enabled', enabled);
+  });
+}
 
 // ===== Render loop =====
 let lastTime = performance.now();
