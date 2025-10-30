@@ -17,5 +17,7 @@ export const raycastSettings = {
 };
 
 export const displaySettings = {
-  showProjectors: true
+  showProjectors: true,
+  showCameraFOV: true,
+  showHeatmap: true
 };

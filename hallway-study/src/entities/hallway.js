@@ -58,7 +58,21 @@ export function buildHall() {
   if (hall.group) scene.remove(hall.group);
   hall.group = new THREE.Group(); scene.add(hall.group);
 
-  // Floor with wavy grid texture
+  // Simple floor for preview cameras (layer 0)
+  const simpleFloorGeo = new THREE.PlaneGeometry(W, L, 1, 1);
+  simpleFloorGeo.rotateX(-Math.PI/2);
+  const simpleFloorMat = new THREE.MeshStandardMaterial({
+    color: 0x0f151c,
+    roughness: 0.9,
+    metalness: 0.0
+  });
+  const simpleFloor = new THREE.Mesh(simpleFloorGeo, simpleFloorMat);
+  simpleFloor.position.y = 0;
+  simpleFloor.receiveShadow = true;
+  simpleFloor.layers.set(0); // Only visible to preview cameras
+  hall.group.add(simpleFloor);
+
+  // Animated floor with wavy grid texture for main camera (layer 1)
   const floorGeo = new THREE.PlaneGeometry(W, L, 1, 1);
   floorGeo.rotateX(-Math.PI/2);
 
@@ -75,8 +89,10 @@ export function buildHall() {
     metalness: 0.0
   });
   const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.position.y = 0;
-  floor.receiveShadow = true; hall.group.add(floor);
+  floor.position.y = 0.001; // Slightly above simple floor to avoid z-fighting
+  floor.receiveShadow = true;
+  floor.layers.set(1); // Only visible to main camera
+  hall.group.add(floor);
 
   // Define half dimensions for lines
   const hw = W/2, hl = L/2;

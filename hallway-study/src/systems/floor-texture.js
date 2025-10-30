@@ -9,6 +9,12 @@ export const lineState = {
   shortLines: []
 };
 
+// Particle trail system
+export const particleState = {
+  particles: [], // Array of {x, y, vx, vy, life, maxLife, color}
+  enabled: true
+};
+
 export function createWavyGridTexture() {
   floorTextureCanvas = document.createElement('canvas');
   floorTextureCtx = floorTextureCanvas.getContext('2d');
@@ -76,8 +82,50 @@ export function updateWavyGridTexture(time, deltaTime, hall, people) {
     // Calculate velocity in canvas space
     const velocityMagnitude = person.isDwelling ? 0 : Math.abs(person.speed);
 
-    return { x: canvasX, y: canvasY, velocity: velocityMagnitude };
+    return { x: canvasX, y: canvasY, velocity: velocityMagnitude, person };
   });
+
+  // ===== PARTICLE TRAILS =====
+  if (particleState.enabled) {
+    // Spawn particles from moving people
+    for (const p of peopleInCanvas) {
+      if (p.velocity < 0.1) continue;
+
+      // Spawn rate based on velocity (1-3 particles per frame when moving)
+      const spawnChance = p.velocity * 2;
+      if (Math.random() < spawnChance) {
+        const hue = (p.y / canvas.height + time * 0.1) % 1.0;
+        particleState.particles.push({
+          x: p.x,
+          y: p.y,
+          vx: (Math.random() - 0.5) * 20,
+          vy: p.person.direction * -30 + (Math.random() - 0.5) * 20, // Trail behind
+          life: 1.0,
+          maxLife: 0.8 + Math.random() * 0.4,
+          hue: hue
+        });
+      }
+    }
+
+    // Update particles
+    for (let i = particleState.particles.length - 1; i >= 0; i--) {
+      const particle = particleState.particles[i];
+      particle.x += particle.vx * deltaTime;
+      particle.y += particle.vy * deltaTime;
+      particle.vx *= 0.95; // Slow down
+      particle.vy *= 0.95;
+      particle.life -= deltaTime / particle.maxLife;
+
+      if (particle.life <= 0) {
+        particleState.particles.splice(i, 1);
+      }
+    }
+
+    // Limit particle count
+    if (particleState.particles.length > 500) {
+      particleState.particles.splice(0, particleState.particles.length - 500);
+    }
+  }
 
   // Physics parameters for wave simulation
   const stiffness = 2.5; // Spring constant between points (higher = faster wave speed)
@@ -182,17 +230,56 @@ export function updateWavyGridTexture(time, deltaTime, hall, people) {
     }
   }
 
-  // Render the displaced lines
+  // Render the displaced lines with dark background
   ctx.fillStyle = '#0f151c';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.strokeStyle = 'rgba(100, 150, 200, 0.6)';
-  ctx.lineWidth = 1; // Very fine lines for dense grid
+  // ===== REACTIVE NEON GRID WITH DYNAMIC COLORS =====
 
-  // Draw long lines
+  // Helper to get color based on activity (velocity magnitude)
+  function getLineColor(velocity, displacement) {
+    // EXTREMELY sensitive - amplify the activity heavily
+    const activity = Math.min(1, Math.abs(velocity) * 50.0 + Math.abs(displacement) * 2.0);
+
+    // Color gradient: calm (deep blue) -> active (bright cyan -> white)
+    if (activity < 0.15) {
+      // Deep blue (calm)
+      const t = activity / 0.15;
+      const r = Math.floor(15 + t * 65);
+      const g = Math.floor(25 + t * 105);
+      const b = Math.floor(80 + t * 120);
+      return `rgb(${r}, ${g}, ${b})`;
+    } else if (activity < 0.4) {
+      // Blue to bright cyan (active)
+      const t = (activity - 0.15) / 0.25;
+      const r = Math.floor(80 + t * 90);
+      const g = Math.floor(130 + t * 110);
+      const b = Math.floor(200 + t * 55);
+      return `rgb(${r}, ${g}, ${b})`;
+    } else {
+      // Bright cyan to white (very active - GLOW!)
+      const t = (activity - 0.4) / 0.6;
+      const r = Math.floor(170 + t * 85);
+      const g = Math.floor(240 + t * 15);
+      const b = 255;
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+  }
+
+  // Draw glow layer (wider, more transparent)
+  ctx.lineWidth = 0.75;
+  ctx.globalAlpha = 0.1;
+
+  // Draw long lines - glow
   for (let i = 0; i < numLongLines; i++) {
     const line = lineState.longLines[i];
     const x = (i / (numLongLines - 1)) * canvas.width;
+
+    // Sample velocity at middle for color
+    const midIdx = Math.floor(pointsPerLine / 2);
+    const avgVel = Math.abs(line.velocityX[midIdx]);
+    const avgDisp = Math.abs(line.displaceX[midIdx]);
+    ctx.strokeStyle = getLineColor(avgVel, avgDisp);
 
     ctx.beginPath();
     for (let j = 0; j < pointsPerLine; j++) {
@@ -209,10 +296,16 @@ export function updateWavyGridTexture(time, deltaTime, hall, people) {
     ctx.stroke();
   }
 
-  // Draw short lines
+  // Draw short lines - glow
   for (let i = 0; i < numShortLines; i++) {
     const line = lineState.shortLines[i];
     const y = (i / (numShortLines - 1)) * canvas.height;
+
+    // Sample velocity at middle for color
+    const midIdx = Math.floor(pointsPerLine / 2);
+    const avgVel = Math.abs(line.velocityY[midIdx]);
+    const avgDisp = Math.abs(line.displaceY[midIdx]);
+    ctx.strokeStyle = getLineColor(avgVel, avgDisp);
 
     ctx.beginPath();
     for (let j = 0; j < pointsPerLine; j++) {
@@ -227,6 +320,89 @@ export function updateWavyGridTexture(time, deltaTime, hall, people) {
       }
     }
     ctx.stroke();
+  }
+
+  // Draw main lines (sharp, brighter)
+  ctx.lineWidth = 0.25;
+  ctx.globalAlpha = 0.65;
+
+  // Draw long lines - main
+  for (let i = 0; i < numLongLines; i++) {
+    const line = lineState.longLines[i];
+    const x = (i / (numLongLines - 1)) * canvas.width;
+
+    const midIdx = Math.floor(pointsPerLine / 2);
+    const avgVel = Math.abs(line.velocityX[midIdx]);
+    const avgDisp = Math.abs(line.displaceX[midIdx]);
+    ctx.strokeStyle = getLineColor(avgVel, avgDisp);
+
+    ctx.beginPath();
+    for (let j = 0; j < pointsPerLine; j++) {
+      const y = (j / (pointsPerLine - 1)) * canvas.height;
+      const finalX = x + line.displaceX[j];
+      const finalY = y;
+
+      if (j === 0) {
+        ctx.moveTo(finalX, finalY);
+      } else {
+        ctx.lineTo(finalX, finalY);
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Draw short lines - main
+  for (let i = 0; i < numShortLines; i++) {
+    const line = lineState.shortLines[i];
+    const y = (i / (numShortLines - 1)) * canvas.height;
+
+    const midIdx = Math.floor(pointsPerLine / 2);
+    const avgVel = Math.abs(line.velocityY[midIdx]);
+    const avgDisp = Math.abs(line.displaceY[midIdx]);
+    ctx.strokeStyle = getLineColor(avgVel, avgDisp);
+
+    ctx.beginPath();
+    for (let j = 0; j < pointsPerLine; j++) {
+      const x = (j / (pointsPerLine - 1)) * canvas.width;
+      const finalX = x;
+      const finalY = y + line.displaceY[j];
+
+      if (j === 0) {
+        ctx.moveTo(finalX, finalY);
+      } else {
+        ctx.lineTo(finalX, finalY);
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Reset alpha
+  ctx.globalAlpha = 1.0;
+
+  // ===== RENDER PARTICLES =====
+  if (particleState.enabled && particleState.particles.length > 0) {
+    ctx.globalCompositeOperation = 'lighter'; // Additive blending for glow
+
+    for (const particle of particleState.particles) {
+      const alpha = particle.life;
+      const size = 4 + (1 - particle.life) * 6; // Grow as they fade
+
+      // Convert hue to RGB (cyan to magenta gradient)
+      const r = Math.floor((Math.sin(particle.hue * Math.PI * 2) * 0.5 + 0.5) * 134 + 100);
+      const g = Math.floor((Math.sin((particle.hue + 0.33) * Math.PI * 2) * 0.5 + 0.5) * 150 + 100);
+      const b = 255;
+
+      // Draw particle glow
+      const gradient = ctx.createRadialGradient(particle.x, particle.y, 0, particle.x, particle.y, size);
+      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.8})`);
+      gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${alpha * 0.4})`);
+      gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(particle.x - size, particle.y - size, size * 2, size * 2);
+    }
+
+    ctx.globalCompositeOperation = 'source-over'; // Reset blend mode
   }
 
   floorTexture.needsUpdate = true;

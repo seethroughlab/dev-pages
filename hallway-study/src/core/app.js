@@ -5,7 +5,7 @@ import { displaySettings } from './config.js';
 import { renderer, scene, camera, controls, setupResizeHandler, previewCameraA, previewCameraB, previewRendererA, previewRendererB } from './scene.js';
 import { updateWavyGridTexture } from '../systems/floor-texture.js';
 import { hall, buildHall, setBuildHeatmapCallback, setCreatePeopleCallback } from '../entities/hallway.js';
-import { buildHeatmap, updateHeatmap, setPointInFrustum2D, setCamerasArray as setHeatmapCameras } from '../systems/heatmap.js';
+import { buildHeatmap, updateHeatmap, updateHeatmapVisibility, setPointInFrustum2D, setCamerasArray as setHeatmapCameras } from '../systems/heatmap.js';
 import { cameras, addCamera, seedCameras, setUpdateHeatmapCallback } from '../entities/camera-node.js';
 import { projectors, createProjectors } from '../entities/projector-node.js';
 import { pointInFrustum2D, updateRaycastVisualization } from '../systems/visibility.js';
@@ -36,6 +36,7 @@ setGUICallbacks({
   saveSettings,
   buildHeatmap,
   updateHeatmap,
+  updateHeatmapVisibility,
   createPeople,
   seedCameras,
   addCamera: addCameraToGUI

@@ -1,6 +1,6 @@
 // ===== Heatmap (floor coverage) =====
 import * as THREE from 'three';
-import { defaults } from '../core/config.js';
+import { defaults, displaySettings } from '../core/config.js';
 import { scene } from '../core/scene.js';
 import { hall } from '../entities/hallway.js';
 
@@ -36,7 +36,9 @@ function setCellSeen(cellMesh, seenBy){
 export function buildHeatmap() {
   const { W, L } = hall.bounds; const origin = hall.origin;
   if (heat.group) { scene.remove(heat.group); heat.cells.length = 0; }
-  heat.group = new THREE.Group(); scene.add(heat.group);
+  heat.group = new THREE.Group();
+  heat.group.visible = displaySettings.showHeatmap;
+  scene.add(heat.group);
 
   const cell = defaults.heatmap.cell;
   const nx = Math.floor(W / cell), nz = Math.floor(L / cell);
@@ -74,5 +76,11 @@ export function updateHeatmap(){
       for (const cam of camerasArray){ if (pointInFrustum2DFunc && pointInFrustum2DFunc(p, cam)) seen++; }
       setCellSeen(heat.cells[idx++], seen);
     }
+  }
+}
+
+export function updateHeatmapVisibility() {
+  if (heat.group) {
+    heat.group.visible = displaySettings.showHeatmap;
   }
 }

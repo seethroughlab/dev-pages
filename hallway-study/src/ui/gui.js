@@ -9,6 +9,7 @@ let projectorsArray = null;
 let saveSettingsCallback = null;
 let buildHeatmapCallback = null;
 let updateHeatmapCallback = null;
+let updateHeatmapVisibilityCallback = null;
 let createPeopleCallback = null;
 let seedCamerasCallback = null;
 let addCameraCallback = null;
@@ -19,6 +20,7 @@ export function setCallbacks(callbacks) {
   saveSettingsCallback = callbacks.saveSettings;
   buildHeatmapCallback = callbacks.buildHeatmap;
   updateHeatmapCallback = callbacks.updateHeatmap;
+  updateHeatmapVisibilityCallback = callbacks.updateHeatmapVisibility;
   createPeopleCallback = callbacks.createPeople;
   seedCamerasCallback = callbacks.seedCameras;
   addCameraCallback = callbacks.addCamera;
@@ -53,6 +55,20 @@ export function setupGUI() {
         proj.group.visible = value;
       });
     }
+    if (saveSettingsCallback) saveSettingsCallback();
+  });
+  displayFolder.add(displaySettings, 'showCameraFOV').name('Show Camera FOV').onChange((value) => {
+    if (camerasArray) {
+      camerasArray.forEach(cam => {
+        if (cam.updateFOVVisibility) {
+          cam.updateFOVVisibility();
+        }
+      });
+    }
+    if (saveSettingsCallback) saveSettingsCallback();
+  });
+  displayFolder.add(displaySettings, 'showHeatmap').name('Show Heatmap').onChange((value) => {
+    if (updateHeatmapVisibilityCallback) updateHeatmapVisibilityCallback();
     if (saveSettingsCallback) saveSettingsCallback();
   });
 

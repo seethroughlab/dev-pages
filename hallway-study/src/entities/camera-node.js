@@ -1,6 +1,6 @@
 // ===== Camera nodes & FOV wedges =====
 import * as THREE from 'three';
-import { defaults, FT } from '../core/config.js';
+import { defaults, displaySettings, FT } from '../core/config.js';
 import { scene } from '../core/scene.js';
 import { hall } from './hallway.js';
 
@@ -91,6 +91,7 @@ export class CamNode {
       this.group.add(this.fov);
     }
     this._rebuildFOV();
+    this.updateFOVVisibility();
   }
   createLabel(text) {
     // Extract just the letter (e.g., "Cam A" -> "A")
@@ -249,6 +250,12 @@ export class CamNode {
     const nearMesh = new THREE.Mesh(nearFace, nearFaceMat);
     nearMesh.layers.set(1);
     this.fov.add(nearMesh);
+  }
+
+  updateFOVVisibility() {
+    if (this.fov) {
+      this.fov.visible = displaySettings.showCameraFOV;
+    }
   }
 }
 
