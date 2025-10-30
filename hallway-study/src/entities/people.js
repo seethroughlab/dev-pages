@@ -17,15 +17,32 @@ let fftData = null;
 function initAudio() {
   if (audioContext) return;
 
+  updateAudioStatus('Initializing audio...', 'warning');
+
   try {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Check if context was created successfully
+    if (!audioContext) {
+      throw new Error('AudioContext creation failed');
+    }
+
+    console.log('AudioContext state:', audioContext.state);
+
+    // Resume context if suspended (required on some browsers)
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().then(() => {
+        console.log('AudioContext resumed');
+      });
+    }
+
     masterGain = audioContext.createGain();
 
-    // Start at zero and fade in over 3 seconds
+    // Start at zero and fade in over 2 seconds (faster)
     masterGain.gain.value = 0;
     const now = audioContext.currentTime;
     masterGain.gain.setValueAtTime(0, now);
-    masterGain.gain.linearRampToValueAtTime(0.3, now + 3.0); // 3 second fade-in
+    masterGain.gain.linearRampToValueAtTime(0.3, now + 2.0); // 2 second fade-in
 
     // Create analyser for FFT visualization
     analyserNode = audioContext.createAnalyser();
@@ -51,16 +68,33 @@ function initAudio() {
     });
 
     // Set musical time start for quantization
-    musicalTimeStart = audioContext.currentTime + 1.0; // Start 1 second from now
+    musicalTimeStart = audioContext.currentTime + 0.5; // Start 500ms from now
 
-    // Delay metronome start by 1 second, let it fade in naturally
+    updateAudioStatus('Audio active - fade in...', 'success');
+
+    // Delay metronome start by 500ms, let it fade in naturally
     setTimeout(() => {
-      startMetronome();
-      console.log('🎵 Audio initialized - musical floor activated with FFT analyzer!');
-    }, 1000);
+      if (audioContext && audioContext.state === 'running') {
+        startMetronome();
+        updateAudioStatus('🎵 Musical floor active', 'success');
+        console.log('🎵 Audio initialized - musical floor activated!');
+      } else {
+        updateAudioStatus('Audio suspended - click to activate', 'error');
+      }
+    }, 500);
 
   } catch (e) {
     console.error('Failed to initialize audio:', e);
+    updateAudioStatus('⚠️ Audio failed - ' + e.message, 'error');
+  }
+}
+
+// Update status display
+function updateAudioStatus(message, type = 'info') {
+  const statusEl = document.getElementById('status');
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.className = 'status-' + type;
   }
 }
 
@@ -117,42 +151,57 @@ if (typeof window !== 'undefined') {
   };
   window.addEventListener('click', initOnInteraction, { once: true });
   window.addEventListener('keydown', initOnInteraction, { once: true });
+
   console.log('🎧 Waiting for user interaction to start audio (click or keypress)...');
+
+  // Show initial status after a brief delay (let page load)
+  setTimeout(() => {
+    updateAudioStatus('Click anywhere to start audio', 'info');
+  }, 100);
 }
 
-// Musical scales - different keys and modes for variety
+// Musical scales following Camelot Wheel harmonic mixing
+// Progression: 8A → 8B → 9B → 9A → 10A → 10B → 11B → 11A (smooth harmonic journey)
 const scales = [
   {
-    name: 'C# Major',
-    notes: [138.59, 155.56, 174.61, 185.00, 207.65, 233.08, 261.63, 277.18, 311.13, 349.23, 369.99, 415.30, 466.16, 523.25]
+    name: 'A Minor (8A)',
+    camelot: '8A',
+    notes: [220.00, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 698.46, 783.99]
   },
   {
-    name: 'D Minor (Natural)',
-    notes: [146.83, 164.81, 174.61, 196.00, 220.00, 233.08, 261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 466.16, 523.25]
+    name: 'C Major (8B)',
+    camelot: '8B',
+    notes: [130.81, 146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88]
   },
   {
-    name: 'E Major',
-    notes: [164.81, 185.00, 207.65, 220.00, 246.94, 277.18, 311.13, 329.63, 369.99, 415.30, 440.00, 493.88, 554.37, 622.25]
+    name: 'G Major (9B)',
+    camelot: '9B',
+    notes: [196.00, 220.00, 246.94, 261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88, 523.25, 587.33, 659.25, 739.99]
   },
   {
-    name: 'F# Minor (Harmonic)',
-    notes: [185.00, 207.65, 220.00, 246.94, 277.18, 293.66, 349.23, 369.99, 415.30, 440.00, 493.88, 554.37, 587.33, 698.46]
+    name: 'E Minor (9A)',
+    camelot: '9A',
+    notes: [164.81, 185.00, 196.00, 220.00, 246.94, 261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88, 523.25, 587.33]
   },
   {
-    name: 'A Major',
+    name: 'B Minor (10A)',
+    camelot: '10A',
+    notes: [246.94, 277.18, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88, 554.37, 587.33, 659.25, 739.99, 783.99, 880.00]
+  },
+  {
+    name: 'D Major (10B)',
+    camelot: '10B',
+    notes: [146.83, 164.81, 185.00, 196.00, 220.00, 246.94, 277.18, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88, 554.37]
+  },
+  {
+    name: 'A Major (11B)',
+    camelot: '11B',
     notes: [220.00, 246.94, 277.18, 293.66, 329.63, 369.99, 415.30, 440.00, 493.88, 554.37, 587.33, 659.25, 739.99, 830.61]
   },
   {
-    name: 'C Major Pentatonic',
-    notes: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99]
-  },
-  {
-    name: 'Bb Major',
-    notes: [116.54, 130.81, 146.83, 155.56, 174.61, 196.00, 220.00, 233.08, 261.63, 293.66, 311.13, 349.23, 392.00, 440.00]
-  },
-  {
-    name: 'G Minor (Melodic)',
-    notes: [196.00, 220.00, 233.08, 261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 466.16, 523.25, 587.33, 659.25, 739.99]
+    name: 'F# Minor (11A)',
+    camelot: '11A',
+    notes: [185.00, 207.65, 220.00, 246.94, 277.18, 293.66, 329.63, 369.99, 415.30, 440.00, 493.88, 554.37, 587.33, 659.25]
   }
 ];
 
@@ -175,22 +224,22 @@ let currentBeat = 0;
 // Chord progressions for each scale (4 chords, each lasting 4 beats = 16 beats total)
 // Each chord is defined as indices into the scale
 const chordProgressions = [
-  // C# Major: I - V - vi - IV
-  [[0, 2, 4], [4, 6, 8], [5, 7, 9], [3, 5, 7]],
-  // D Minor: i - iv - VII - III
-  [[0, 2, 4], [3, 5, 7], [6, 8, 10], [2, 4, 6]],
-  // E Major: I - IV - V - I
+  // A Minor (8A): i - iv - v - i
   [[0, 2, 4], [3, 5, 7], [4, 6, 8], [0, 2, 4]],
-  // F# Minor: i - VI - III - VII
+  // C Major (8B): I - vi - IV - V (classic pop)
+  [[0, 2, 4], [5, 7, 9], [3, 5, 7], [4, 6, 8]],
+  // G Major (9B): I - V - vi - IV
+  [[0, 2, 4], [4, 6, 8], [5, 7, 9], [3, 5, 7]],
+  // E Minor (9A): i - VI - III - VII
   [[0, 2, 4], [5, 7, 9], [2, 4, 6], [6, 8, 10]],
-  // A Major: I - V - vi - IV
-  [[0, 2, 4], [4, 6, 8], [5, 7, 9], [3, 5, 7]],
-  // C Major Pentatonic: Simple two-chord vamp
-  [[0, 2, 4], [2, 4, 6], [0, 2, 4], [2, 4, 6]],
-  // Bb Major: I - IV - V - I
+  // B Minor (10A): i - iv - VII - III
+  [[0, 2, 4], [3, 5, 7], [6, 8, 10], [2, 4, 6]],
+  // D Major (10B): I - IV - V - I
   [[0, 2, 4], [3, 5, 7], [4, 6, 8], [0, 2, 4]],
-  // G Minor: i - iv - v - i
-  [[0, 2, 4], [3, 5, 7], [4, 6, 8], [0, 2, 4]]
+  // A Major (11B): I - V - vi - IV
+  [[0, 2, 4], [4, 6, 8], [5, 7, 9], [3, 5, 7]],
+  // F# Minor (11A): i - VI - III - VII
+  [[0, 2, 4], [5, 7, 9], [2, 4, 6], [6, 8, 10]]
 ];
 
 // Get current chord tones based on musical time
@@ -223,22 +272,43 @@ function getCurrentChordTones() {
   return [...chord, ...chord.map(n => n + 7), ...chord.map(n => n + 3.5).map(Math.floor)];
 }
 
-// Instrument types with different characteristics
-const instrumentTypes = [
-  { name: 'Sharp Pluck', attack: 0.001, decay: 0.2, sustain: 0, release: 0.1, waveform: 'triangle' },
-  { name: 'Soft Pad', attack: 0.3, decay: 0.4, sustain: 0.6, release: 0.8, waveform: 'sine' },
-  { name: 'Bright Bell', attack: 0.005, decay: 0.6, sustain: 0.2, release: 0.4, waveform: 'square' },
-  { name: 'Warm Bass', attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.3, waveform: 'sawtooth' },
-  { name: 'Hollow Flute', attack: 0.05, decay: 0.5, sustain: 0.4, release: 0.6, waveform: 'sine' },
-  { name: 'Percussive Hit', attack: 0.001, decay: 0.15, sustain: 0, release: 0.05, waveform: 'square' },
-  { name: 'String Pluck', attack: 0.002, decay: 0.8, sustain: 0.1, release: 0.5, waveform: 'sawtooth' },
-  { name: 'Synth Lead', attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.3, waveform: 'sawtooth' },
-  { name: 'Mellow Organ', attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.7, waveform: 'triangle' },
-  { name: 'Glass Chime', attack: 0.001, decay: 1.2, sustain: 0, release: 0.2, waveform: 'sine' }
-];
+// Instrument types organized by category for balanced orchestration
+const instrumentTypes = {
+  bass: [
+    { name: 'Deep Bass', attack: 0.01, decay: 0.4, sustain: 0.6, release: 0.3, waveform: 'sawtooth' },
+    { name: 'Sub Bass', attack: 0.005, decay: 0.3, sustain: 0.7, release: 0.2, waveform: 'sine' },
+    { name: 'Synth Bass', attack: 0.01, decay: 0.2, sustain: 0.5, release: 0.3, waveform: 'square' }
+  ],
+  percussion: [
+    { name: 'Sharp Pluck', attack: 0.001, decay: 0.2, sustain: 0, release: 0.1, waveform: 'triangle' },
+    { name: 'Percussive Hit', attack: 0.001, decay: 0.15, sustain: 0, release: 0.05, waveform: 'square' },
+    { name: 'Glass Chime', attack: 0.001, decay: 1.2, sustain: 0, release: 0.2, waveform: 'sine' },
+    { name: 'Marimba', attack: 0.002, decay: 0.5, sustain: 0, release: 0.3, waveform: 'triangle' }
+  ],
+  pads: [
+    { name: 'Soft Pad', attack: 0.3, decay: 0.4, sustain: 0.6, release: 0.8, waveform: 'sine' },
+    { name: 'Mellow Organ', attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.7, waveform: 'triangle' },
+    { name: 'String Pad', attack: 0.2, decay: 0.5, sustain: 0.7, release: 1.0, waveform: 'sawtooth' }
+  ],
+  leads: [
+    { name: 'Synth Lead', attack: 0.01, decay: 0.2, sustain: 0.7, release: 0.3, waveform: 'sawtooth' },
+    { name: 'Hollow Flute', attack: 0.05, decay: 0.5, sustain: 0.4, release: 0.6, waveform: 'sine' },
+    { name: 'String Pluck', attack: 0.002, decay: 0.8, sustain: 0.1, release: 0.5, waveform: 'sawtooth' },
+    { name: 'Bright Bell', attack: 0.005, decay: 0.6, sustain: 0.2, release: 0.4, waveform: 'square' }
+  ]
+};
+
+// Track last category used for cycling
+let lastCategoryIndex = -1;
+const categories = ['bass', 'percussion', 'pads', 'leads'];
 
 // Generate unique instrument for a person ID
 function generateInstrument(personId) {
+  // Cycle through categories to ensure balanced instrumentation
+  lastCategoryIndex = (lastCategoryIndex + 1) % categories.length;
+  const category = categories[lastCategoryIndex];
+  const categoryInstruments = instrumentTypes[category];
+
   // Use person ID as seed for deterministic randomness
   const seed = personId * 2654435761; // Large prime for better distribution
 
@@ -248,34 +318,66 @@ function generateInstrument(personId) {
     return min + (x - Math.floor(x)) * (max - min);
   };
 
-  // Pick a base instrument type
-  const baseType = instrumentTypes[personId % instrumentTypes.length];
+  // Pick an instrument from the current category
+  const instrumentIndex = Math.floor(random(0, categoryInstruments.length));
+  const baseType = categoryInstruments[instrumentIndex];
 
-  // Generate unique variations
+  // Generate unique variations based on category
+  const variations = {
+    bass: {
+      numOscillators: Math.floor(1 + random(0, 2)), // 1-2 for bass (keep it tight)
+      detuneAmount: random(0, 5), // Minimal detune for bass
+      filterFreq: random(80, 400), // Low frequencies
+      baseVolume: random(0.4, 0.6) // Louder for foundation
+    },
+    percussion: {
+      numOscillators: 1, // Single oscillator for clarity
+      detuneAmount: 0, // No detune for percussion
+      filterFreq: random(1000, 6000), // High frequencies
+      baseVolume: random(0.3, 0.5)
+    },
+    pads: {
+      numOscillators: Math.floor(2 + random(0, 2)), // 2-3 for richness
+      detuneAmount: random(5, 15), // Lots of detune for width
+      filterFreq: random(500, 3000), // Mid frequencies
+      baseVolume: random(0.2, 0.35) // Quieter for background
+    },
+    leads: {
+      numOscillators: Math.floor(1 + random(0, 3)), // 1-3 for variety
+      detuneAmount: random(0, 10), // Moderate detune
+      filterFreq: random(800, 5000), // Mid-high frequencies
+      baseVolume: random(0.35, 0.5)
+    }
+  };
+
+  const categoryVars = variations[category];
+
+  // Build instrument with category-specific characteristics
   return {
     name: baseType.name,
+    category: category,
     waveform: baseType.waveform,
     attack: baseType.attack * (0.5 + random(0, 1)),
     decay: baseType.decay * (0.5 + random(0, 1.5)),
     sustain: baseType.sustain,
     release: baseType.release * (0.5 + random(0, 1.5)),
 
-    // Harmonic complexity
-    numOscillators: Math.floor(1 + random(0, 3)), // 1-3 oscillators
-    detuneAmount: random(0, 15), // 0-15 cents detune
+    // Category-specific variations
+    numOscillators: categoryVars.numOscillators,
+    detuneAmount: categoryVars.detuneAmount,
+    filterFreq: categoryVars.filterFreq,
+    baseVolume: categoryVars.baseVolume,
 
     // Filter characteristics
     useFilter: random() > 0.5,
-    filterFreq: random(300, 4000),
     filterQ: random(1, 10),
 
     // Vibrato
     vibratoRate: random(3, 8), // 3-8 Hz
     vibratoDepth: random(0.5, 4), // 0.5-4 cents
 
-    // Volume and brightness
-    brightness: random(0.3, 1.0), // Affects harmonic content
-    baseVolume: random(0.3, 0.5)
+    // Brightness
+    brightness: random(0.3, 1.0)
   };
 }
 
@@ -495,7 +597,7 @@ export class Person {
 
     this.id = nextPersonId++;
     this.instrument = generateInstrument(this.id); // Generate unique instrument for this person
-    console.log(`🎹 Person ${this.id} created with instrument: ${this.instrument.name} (${this.instrument.numOscillators} osc, filter: ${this.instrument.useFilter})`);
+    console.log(`🎹 Person ${this.id} [${this.instrument.category.toUpperCase()}]: ${this.instrument.name} (${this.instrument.numOscillators} osc, vol: ${this.instrument.baseVolume.toFixed(2)})`);
 
     // Create personal audio analyser for FFT visualization
     this.analyser = null;
@@ -628,7 +730,7 @@ export class Person {
     const boxHeight = this.height;
     const boxDepth = this.radius * 2;
 
-    const text = `ID:${this.id} • ${this.instrument.name}`;
+    const text = `ID:${this.id} • ${this.instrument.name} [${this.instrument.category.toUpperCase()}]`;
     ctx.fillText(text, 10, 5);
 
     // Position info on second line
@@ -822,10 +924,25 @@ export class Person {
               const baseChordTone = chordTones[chordDegree] || chordTones[0];
 
               // Map Z position to octave shift (so movement creates register changes, not linear scale)
-              const octaveShift = Math.floor(zNorm * 3); // 0, 1, or 2 octaves up
-              const scaleIdx = (baseChordTone + octaveShift * 7) % currentScale.length;
+              // Bass instruments stay in lower register
+              let octaveShift;
+              if (this.instrument.category === 'bass') {
+                octaveShift = 0; // Bass always plays root octave
+              } else if (this.instrument.category === 'percussion') {
+                octaveShift = Math.floor(zNorm * 2) + 1; // Mid-high register (1-2 octaves up)
+              } else if (this.instrument.category === 'pads') {
+                octaveShift = Math.floor(zNorm * 2); // Low-mid register (0-1 octaves up)
+              } else { // leads
+                octaveShift = Math.floor(zNorm * 3); // Full range (0-2 octaves up)
+              }
 
-              const frequency = currentScale[scaleIdx];
+              const scaleIdx = (baseChordTone + octaveShift * 7) % currentScale.length;
+              let frequency = currentScale[scaleIdx];
+
+              // Further octave shift for bass (play an octave down)
+              if (this.instrument.category === 'bass' && frequency > 200) {
+                frequency = frequency / 2;
+              }
 
               // Schedule the note at the quantized time
               playPluck(frequency, this.xOffset, this.z, W, L, this.instrument, this.analyser, quantizedTime);
@@ -937,7 +1054,8 @@ export function updatePeople(deltaTime, cameras) {
   if (scaleChangeTime >= SCALE_CHANGE_INTERVAL) {
     scaleChangeTime = 0;
     currentScaleIndex = (currentScaleIndex + 1) % scales.length;
-    console.log(`🎵 Scale changed to: ${scales[currentScaleIndex].name}`);
+    const scale = scales[currentScaleIndex];
+    console.log(`🎵 Key change: ${scale.name} [${scale.camelot}]`);
 
     // Clear all crossed lines so people can trigger notes again in the new scale
     people.forEach(p => p.crossedLines.clear());

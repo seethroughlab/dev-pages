@@ -182,3 +182,54 @@ html, body {
 #tracking-json::-webkit-scrollbar-thumb:hover {
   background: rgba(46, 133, 255, 0.5);
 }
+
+/* Audio Status Indicators */
+#status {
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.status-info {
+  background: rgba(46, 133, 255, 0.15);
+  color: #58a6ff;
+  border: 1px solid rgba(46, 133, 255, 0.3);
+  animation: pulse-info 2s ease-in-out infinite;
+}
+
+.status-warning {
+  background: rgba(219, 171, 9, 0.15);
+  color: #d4a72c;
+  border: 1px solid rgba(219, 171, 9, 0.3);
+  animation: pulse-warning 1.5s ease-in-out infinite;
+}
+
+.status-success {
+  background: rgba(46, 160, 67, 0.15);
+  color: #3fb950;
+  border: 1px solid rgba(46, 160, 67, 0.3);
+}
+
+.status-error {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.3);
+  animation: pulse-error 1s ease-in-out infinite;
+}
+
+@keyframes pulse-info {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+@keyframes pulse-error {
+  0%, 100% { opacity: 1; border-color: rgba(248, 81, 73, 0.5); }
+  50% { opacity: 0.8; border-color: rgba(248, 81, 73, 0.2); }
+}
