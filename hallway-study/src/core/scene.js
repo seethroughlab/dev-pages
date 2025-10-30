@@ -40,16 +40,19 @@ previewRendererB.setClearColor(0x0b0f14, 1);
 // ===== Depth render targets =====
 // Create render targets with depth textures for both cameras
 export const depthRenderTargetA = new THREE.WebGLRenderTarget(previewWidth, previewHeight, {
-  minFilter: THREE.NearestFilter,
-  magFilter: THREE.NearestFilter,
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
   format: THREE.RGBAFormat,
   type: THREE.UnsignedByteType,
   depthBuffer: true,
-  stencilBuffer: false
+  stencilBuffer: false,
+  generateMipmaps: false
 });
 depthRenderTargetA.depthTexture = new THREE.DepthTexture(previewWidth, previewHeight);
 depthRenderTargetA.depthTexture.format = THREE.DepthFormat;
 depthRenderTargetA.depthTexture.type = THREE.UnsignedIntType;
+depthRenderTargetA.depthTexture.minFilter = THREE.NearestFilter;
+depthRenderTargetA.depthTexture.magFilter = THREE.NearestFilter;
 
 export const depthRenderTargetB = new THREE.WebGLRenderTarget(previewWidth, previewHeight, {
   minFilter: THREE.LinearFilter,
@@ -57,11 +60,14 @@ export const depthRenderTargetB = new THREE.WebGLRenderTarget(previewWidth, prev
   format: THREE.RGBAFormat,
   type: THREE.UnsignedByteType,
   depthBuffer: true,
-  stencilBuffer: false
+  stencilBuffer: false,
+  generateMipmaps: false
 });
 depthRenderTargetB.depthTexture = new THREE.DepthTexture(previewWidth, previewHeight);
 depthRenderTargetB.depthTexture.format = THREE.DepthFormat;
 depthRenderTargetB.depthTexture.type = THREE.UnsignedIntType;
+depthRenderTargetB.depthTexture.minFilter = THREE.NearestFilter;
+depthRenderTargetB.depthTexture.magFilter = THREE.NearestFilter;
 
 // ===== Depth visualization shader =====
 // Oak-D style depth map: near = warm (red/orange), far = cool (blue/purple)
@@ -96,25 +102,34 @@ const depthVisualizationShader = {
     vec3 depthToColor(float depth) {
       // depth is 0 (near) to 1 (far)
       // Invert so near is 1.0, far is 0.0
-      float d = 1.0 - depth;
+      float d = 1.0 - clamp(depth, 0.0, 1.0);
 
-      // Create a multi-stop gradient similar to Oak-D depth visualization
+      // Smoother color transitions to reduce flickering
+      // Use smoothstep for gradual transitions between color stops
+      vec3 color1 = vec3(0.0, 0.0, 0.2);    // Very far: dark blue
+      vec3 color2 = vec3(0.0, 0.3, 0.9);    // Far: blue
+      vec3 color3 = vec3(0.0, 0.8, 0.8);    // Mid-far: cyan
+      vec3 color4 = vec3(0.1, 0.9, 0.3);    // Mid: green
+      vec3 color5 = vec3(1.0, 0.85, 0.0);   // Near: yellow
+      vec3 color6 = vec3(1.0, 0.15, 0.0);   // Very near: red
+
+      // Smooth interpolation between 6 color stops
       vec3 color;
       if (d < 0.2) {
-        // Very far: dark blue to blue
-        color = mix(vec3(0.0, 0.0, 0.1), vec3(0.0, 0.2, 0.8), d * 5.0);
+        float t = smoothstep(0.0, 0.2, d);
+        color = mix(color1, color2, t);
       } else if (d < 0.4) {
-        // Far: blue to cyan
-        color = mix(vec3(0.0, 0.2, 0.8), vec3(0.0, 0.8, 0.8), (d - 0.2) * 5.0);
+        float t = smoothstep(0.2, 0.4, d);
+        color = mix(color2, color3, t);
       } else if (d < 0.6) {
-        // Mid: cyan to green
-        color = mix(vec3(0.0, 0.8, 0.8), vec3(0.0, 0.9, 0.2), (d - 0.4) * 5.0);
+        float t = smoothstep(0.4, 0.6, d);
+        color = mix(color3, color4, t);
       } else if (d < 0.8) {
-        // Near: green to yellow
-        color = mix(vec3(0.0, 0.9, 0.2), vec3(1.0, 0.9, 0.0), (d - 0.6) * 5.0);
+        float t = smoothstep(0.6, 0.8, d);
+        color = mix(color4, color5, t);
       } else {
-        // Very near: yellow to red
-        color = mix(vec3(1.0, 0.9, 0.0), vec3(1.0, 0.1, 0.0), (d - 0.8) * 5.0);
+        float t = smoothstep(0.8, 1.0, d);
+        color = mix(color5, color6, t);
       }
 
       return color;

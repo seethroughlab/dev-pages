@@ -807,6 +807,11 @@ export class Person {
     this.height = this.sliceCount * sliceHeight; // 0.85m (kids) to 1.7m (adults)
 
     this.group = new THREE.Group();
+
+    // Hide initially until first position update to prevent flash at origin
+    this.group.visible = false;
+    this.isFirstUpdate = true;
+
     scene.add(this.group);
 
     for (let i = 0; i < this.sliceCount; i++) {
@@ -1132,6 +1137,12 @@ export class Person {
 
     // Update group position
     this.group.position.set(this.xOffset, 0, origin.z + this.z);
+
+    // Make visible after first position update (prevents flash at origin)
+    if (this.isFirstUpdate) {
+      this.group.visible = true;
+      this.isFirstUpdate = false;
+    }
 
     // Check visibility for each slice separately
     let anyVisible = false;
