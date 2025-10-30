@@ -1,7 +1,7 @@
 // ===== GUI =====
 import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
 import { defaults, peopleSettings, raycastSettings, displaySettings, FT } from '../core/config.js';
-import { scene } from '../core/scene.js';
+import { scene, setDepthVisualizationMode } from '../core/scene.js';
 
 export let gui;
 let camerasArray = null;
@@ -69,6 +69,10 @@ export function setupGUI() {
   });
   displayFolder.add(displaySettings, 'showHeatmap').name('Show Heatmap').onChange((value) => {
     if (updateHeatmapVisibilityCallback) updateHeatmapVisibilityCallback();
+    if (saveSettingsCallback) saveSettingsCallback();
+  });
+  displayFolder.add(displaySettings, 'showDepthVisualization').name('Depth View (Cameras)').onChange((value) => {
+    setDepthVisualizationMode(value);
     if (saveSettingsCallback) saveSettingsCallback();
   });
 

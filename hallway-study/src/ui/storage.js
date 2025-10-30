@@ -1,6 +1,6 @@
 // ===== Auto-save to localStorage & Import/Export =====
 import { defaults, peopleSettings, displaySettings } from '../core/config.js';
-import { camera, controls } from '../core/scene.js';
+import { camera, controls, setDepthVisualizationMode } from '../core/scene.js';
 
 // These will be set by main app
 let camerasArray = null;
@@ -64,6 +64,10 @@ export function loadSettings() {
     // Load display settings
     if (data.display) {
       Object.assign(displaySettings, data.display);
+      // Sync depth visualization mode
+      if (data.display.showDepthVisualization !== undefined) {
+        setDepthVisualizationMode(data.display.showDepthVisualization);
+      }
       // Apply projector visibility (will be done by main app)
     }
 
@@ -118,6 +122,10 @@ export function importJSON(file, callbacks){
       // Load display settings
       if (data.display) {
         Object.assign(displaySettings, data.display);
+        // Sync depth visualization mode
+        if (data.display.showDepthVisualization !== undefined) {
+          setDepthVisualizationMode(data.display.showDepthVisualization);
+        }
         // Apply projector visibility (callback will handle this)
       }
 

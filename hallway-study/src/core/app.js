@@ -2,7 +2,7 @@
 // Imports from modules
 import * as THREE from 'three';
 import { displaySettings } from './config.js';
-import { renderer, scene, camera, controls, setupResizeHandler, previewCameraA, previewCameraB, previewRendererA, previewRendererB } from './scene.js';
+import { renderer, scene, camera, controls, setupResizeHandler, previewCameraA, previewCameraB, previewRendererA, previewRendererB, depthRenderTargetA, depthRenderTargetB, depthVisualizationMode, depthSceneA, depthSceneB, depthQuadCameraA, depthQuadCameraB } from './scene.js';
 import { updateWavyGridTexture } from '../systems/floor-texture.js';
 import { hall, buildHall, setBuildHeatmapCallback, setCreatePeopleCallback } from '../entities/hallway.js';
 import { buildHeatmap, updateHeatmap, updateHeatmapVisibility, setPointInFrustum2D, setCamerasArray as setHeatmapCameras } from '../systems/heatmap.js';
@@ -128,8 +128,18 @@ function updateCameraPreviews() {
     previewCameraA.lookAt(lookAtTarget);
     previewCameraA.updateMatrixWorld();
 
-    // Render from Camera A's perspective
-    previewRendererA.render(scene, previewCameraA);
+    if (depthVisualizationMode) {
+      // Render to depth render target first
+      previewRendererA.setRenderTarget(depthRenderTargetA);
+      previewRendererA.render(scene, previewCameraA);
+      previewRendererA.setRenderTarget(null);
+
+      // Then render the depth visualization to the canvas
+      previewRendererA.render(depthSceneA, depthQuadCameraA);
+    } else {
+      // Render RGB from Camera A's perspective
+      previewRendererA.render(scene, previewCameraA);
+    }
   }
 
   if (camB && camB.group) {
@@ -149,8 +159,18 @@ function updateCameraPreviews() {
     previewCameraB.lookAt(lookAtTarget);
     previewCameraB.updateMatrixWorld();
 
-    // Render from Camera B's perspective
-    previewRendererB.render(scene, previewCameraB);
+    if (depthVisualizationMode) {
+      // Render to depth render target first
+      previewRendererB.setRenderTarget(depthRenderTargetB);
+      previewRendererB.render(scene, previewCameraB);
+      previewRendererB.setRenderTarget(null);
+
+      // Then render the depth visualization to the canvas
+      previewRendererB.render(depthSceneB, depthQuadCameraB);
+    } else {
+      // Render RGB from Camera B's perspective
+      previewRendererB.render(scene, previewCameraB);
+    }
   }
 }
 

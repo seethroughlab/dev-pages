@@ -37,6 +37,139 @@ previewRendererB.setPixelRatio(Math.min(2, window.devicePixelRatio));
 previewRendererB.setSize(previewWidth, previewHeight, false);
 previewRendererB.setClearColor(0x0b0f14, 1);
 
+// ===== Depth render targets =====
+// Create render targets with depth textures for both cameras
+export const depthRenderTargetA = new THREE.WebGLRenderTarget(previewWidth, previewHeight, {
+  minFilter: THREE.NearestFilter,
+  magFilter: THREE.NearestFilter,
+  format: THREE.RGBAFormat,
+  type: THREE.UnsignedByteType,
+  depthBuffer: true,
+  stencilBuffer: false
+});
+depthRenderTargetA.depthTexture = new THREE.DepthTexture(previewWidth, previewHeight);
+depthRenderTargetA.depthTexture.format = THREE.DepthFormat;
+depthRenderTargetA.depthTexture.type = THREE.UnsignedIntType;
+
+export const depthRenderTargetB = new THREE.WebGLRenderTarget(previewWidth, previewHeight, {
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+  format: THREE.RGBAFormat,
+  type: THREE.UnsignedByteType,
+  depthBuffer: true,
+  stencilBuffer: false
+});
+depthRenderTargetB.depthTexture = new THREE.DepthTexture(previewWidth, previewHeight);
+depthRenderTargetB.depthTexture.format = THREE.DepthFormat;
+depthRenderTargetB.depthTexture.type = THREE.UnsignedIntType;
+
+// ===== Depth visualization shader =====
+// Oak-D style depth map: near = warm (red/orange), far = cool (blue/purple)
+const depthVisualizationShader = {
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    #include <packing>
+
+    uniform sampler2D tDepth;
+    uniform float cameraNear;
+    uniform float cameraFar;
+    varying vec2 vUv;
+
+    // Convert non-linear depth buffer value to linear depth
+    float readDepth(sampler2D depthSampler, vec2 coord) {
+      float fragCoordZ = texture2D(depthSampler, coord).x;
+      // Convert from [0,1] non-linear depth to view space Z (negative values)
+      float viewZ = perspectiveDepthToViewZ(fragCoordZ, cameraNear, cameraFar);
+      // viewZ is negative, so we take abs and normalize to [0,1]
+      // 0 = near plane (0.7m), 1 = far plane (12m)
+      float linearDepth = (-viewZ - cameraNear) / (cameraFar - cameraNear);
+      return clamp(linearDepth, 0.0, 1.0);
+    }
+
+    // Oak-D style colormap: warm (near) to cool (far)
+    vec3 depthToColor(float depth) {
+      // depth is 0 (near) to 1 (far)
+      // Invert so near is 1.0, far is 0.0
+      float d = 1.0 - depth;
+
+      // Create a multi-stop gradient similar to Oak-D depth visualization
+      vec3 color;
+      if (d < 0.2) {
+        // Very far: dark blue to blue
+        color = mix(vec3(0.0, 0.0, 0.1), vec3(0.0, 0.2, 0.8), d * 5.0);
+      } else if (d < 0.4) {
+        // Far: blue to cyan
+        color = mix(vec3(0.0, 0.2, 0.8), vec3(0.0, 0.8, 0.8), (d - 0.2) * 5.0);
+      } else if (d < 0.6) {
+        // Mid: cyan to green
+        color = mix(vec3(0.0, 0.8, 0.8), vec3(0.0, 0.9, 0.2), (d - 0.4) * 5.0);
+      } else if (d < 0.8) {
+        // Near: green to yellow
+        color = mix(vec3(0.0, 0.9, 0.2), vec3(1.0, 0.9, 0.0), (d - 0.6) * 5.0);
+      } else {
+        // Very near: yellow to red
+        color = mix(vec3(1.0, 0.9, 0.0), vec3(1.0, 0.1, 0.0), (d - 0.8) * 5.0);
+      }
+
+      return color;
+    }
+
+    void main() {
+      float depth = readDepth(tDepth, vUv);
+      vec3 color = depthToColor(depth);
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `
+};
+
+// Create depth visualization materials for both cameras
+export const depthVisualizationMaterialA = new THREE.ShaderMaterial({
+  vertexShader: depthVisualizationShader.vertexShader,
+  fragmentShader: depthVisualizationShader.fragmentShader,
+  uniforms: {
+    tDepth: { value: depthRenderTargetA.depthTexture },
+    cameraNear: { value: 0.7 },
+    cameraFar: { value: 12 }
+  }
+});
+
+export const depthVisualizationMaterialB = new THREE.ShaderMaterial({
+  vertexShader: depthVisualizationShader.vertexShader,
+  fragmentShader: depthVisualizationShader.fragmentShader,
+  uniforms: {
+    tDepth: { value: depthRenderTargetB.depthTexture },
+    cameraNear: { value: 0.7 },
+    cameraFar: { value: 12 }
+  }
+});
+
+// Create fullscreen quads for displaying depth visualization
+const quadGeometry = new THREE.PlaneGeometry(2, 2);
+export const depthQuadA = new THREE.Mesh(quadGeometry, depthVisualizationMaterialA);
+export const depthQuadB = new THREE.Mesh(quadGeometry, depthVisualizationMaterialB);
+
+// Create orthographic cameras for rendering the depth quads
+export const depthQuadCameraA = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+export const depthQuadCameraB = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+// Create scenes for the depth quads
+export const depthSceneA = new THREE.Scene();
+depthSceneA.add(depthQuadA);
+export const depthSceneB = new THREE.Scene();
+depthSceneB.add(depthQuadB);
+
+// Depth visualization mode toggle (false = RGB, true = depth)
+export let depthVisualizationMode = false;
+export function setDepthVisualizationMode(enabled) {
+  depthVisualizationMode = enabled;
+}
+
 // ===== Preview cameras =====
 // Three.js PerspectiveCamera uses VERTICAL FOV, not horizontal
 // OAK-D Pro PoE: hFOV=80°, vFOV=55° (calculated from 80° * (10/16) aspect)

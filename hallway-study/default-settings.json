@@ -1,15 +1,16 @@
 {
   "heatmap": {
-    "cell": 1
+    "cell": 0.6
   },
   "people": {
     "enabled": true,
-    "count": 10
+    "count": 3
   },
   "display": {
-    "showProjectors": false,
-    "showCameraFOV": false,
-    "showHeatmap": false
+    "showProjectors": true,
+    "showCameraFOV": true,
+    "showHeatmap": false,
+    "showDepthVisualization": true
   },
   "cameras": [
     {
@@ -39,9 +40,9 @@
   ],
   "orbitCamera": {
     "position": [
-      -4.861530149036987,
-      11.903776967304422,
-      4.621574098243415
+      -4.11630936045858,
+      9.769608458266156,
+      6.000311118124745
     ],
     "target": [
       -0.8236326424221533,
