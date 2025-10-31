@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Hallway Coverage Planner — Three.js</title>
-  <link rel="stylesheet" href="css/styles.css">
+  <title>Hallway Study - Three.js</title>
+  <link rel="stylesheet" href="styles.css">
 
   <!-- Import map for Three.js r180 -->
-  <script type="importmap"> 
+  <script type="importmap">
     {
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
@@ -19,114 +19,57 @@
 <body>
   <div id="app"></div>
 
-  <!-- Music Info Display - Key and BPM -->
-  <div class="music-info">
-    <button id="audio-toggle" class="audio-toggle-btn">Enable Audio</button>
-    <div class="music-key">
-      <span class="music-label">KEY</span>
-      <span class="music-value" id="music-key">--</span>
-    </div>
-    <div class="music-bpm">
-      <span class="music-label">BPM</span>
-      <span class="music-value" id="music-bpm">--</span>
-    </div>
+  <!-- View Mode Toolbar (top-left) -->
+  <div class="view-toolbar">
+    <button id="camera-mode" class="view-btn active" title="Toggle Perspective/Orthographic">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M1 7l11-5 11 5M1 7l11 5M1 7v10l11 5M23 7l-11 5M23 7v10l-11 5M12 12v10"/>
+      </svg>
+      <span class="view-label" id="view-label">PERSP</span>
+    </button>
   </div>
 
-  <div class="hud">
-    <span id="status"></span>
+  <!-- Transform Mode Toolbar -->
+  <div class="transform-toolbar" style="display: none;">
+    <button id="translate-mode" class="transform-btn active" title="Translate (W)">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14M5 12h14"/>
+        <path d="M12 5l-3 3M12 5l3 3M19 12l-3 3M19 12l-3-3M12 19l-3-3M12 19l3-3M5 12l3 3M5 12l3-3"/>
+      </svg>
+      <span class="key-hint">W</span>
+    </button>
+    <button id="rotate-mode" class="transform-btn" title="Rotate (E)">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/>
+        <path d="M21 3v5h-5"/>
+      </svg>
+      <span class="key-hint">E</span>
+    </button>
   </div>
 
-  <!-- Left Sidebar with collapsible panels -->
-  <div class="sidebar">
-    <!-- Camera Specs Panel -->
-    <div class="panel collapsed" data-panel-id="camera-specs">
-      <button class="panel-toggle" data-target="specs-content">
-        <span class="toggle-icon">▼</span>
-        <span class="toggle-text">Camera Specs</span>
+  <!-- Camera Preview Panel (old single preview - keeping for now) -->
+  <div id="camera-preview" class="preview-panel" style="display: none;">
+    <div class="preview-header">Camera Preview</div>
+    <canvas id="preview-canvas"></canvas>
+  </div>
+
+  <!-- Multi-Camera Preview Panel (bottom collapsible) -->
+  <div id="multi-preview-panel" class="multi-preview-panel">
+    <div class="multi-preview-header">
+      <button id="toggle-previews" class="toggle-btn">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 6l4 4 4-4"/>
+        </svg>
+        <span id="preview-count">Camera Previews (0)</span>
       </button>
-      <div class="panel-content" id="specs-content">
-        <h3>OAK-D Pro PoE</h3>
-        <h4>Stereo Depth Cameras (OV9282)</h4>
-
-        <div class="spec-group">
-          <div class="spec-label">Resolution</div>
-          <div class="spec-value">1280 × 800 (1MP)</div>
-        </div>
-
-        <div class="spec-group">
-          <div class="spec-label">Aspect Ratio</div>
-          <div class="spec-value">16:10</div>
-        </div>
-
-        <div class="spec-group">
-          <div class="spec-label">Field of View</div>
-          <div class="spec-value">
-            H: 80° / V: 55° / D: 89.5°
-          </div>
-        </div>
-
-        <div class="spec-group">
-          <div class="spec-label">Stereo Baseline</div>
-          <div class="spec-value">7.5 cm</div>
-        </div>
-
-        <div class="spec-group">
-          <div class="spec-label">Depth Range (Ideal)</div>
-          <div class="spec-value">70 cm – 12 m</div>
-        </div>
-
-        <div class="spec-group">
-          <div class="spec-label">Min Depth (Extended)</div>
-          <div class="spec-value">~20 cm</div>
-        </div>
-
-        <div class="spec-group">
-          <div class="spec-label">Max Frame Rate</div>
-          <div class="spec-value">120 FPS</div>
-        </div>
-
-        <div class="spec-group">
-          <div class="spec-label">Shutter Type</div>
-          <div class="spec-value">Global</div>
-        </div>
-      </div>
     </div>
-
-    <!-- Camera A Preview Panel -->
-    <div class="panel collapsed" data-panel-id="camera-a">
-      <button class="panel-toggle" data-target="camA-content">
-        <span class="toggle-icon">▼</span>
-        <span class="toggle-text">Camera A</span>
-      </button>
-      <div class="panel-content preview-panel-content" id="camA-content">
-        <canvas id="camA-preview"></canvas>
-      </div>
-    </div>
-
-    <!-- Camera B Preview Panel -->
-    <div class="panel collapsed" data-panel-id="camera-b">
-      <button class="panel-toggle" data-target="camB-content">
-        <span class="toggle-icon">▼</span>
-        <span class="toggle-text">Camera B</span>
-      </button>
-      <div class="panel-content preview-panel-content" id="camB-content">
-        <canvas id="camB-preview"></canvas>
-      </div>
-    </div>
-
-    <!-- Tracking JSON Debug Panel -->
-    <div class="panel collapsed" data-panel-id="tracking-data">
-      <button class="panel-toggle" data-target="tracking-content">
-        <span class="toggle-icon">▼</span>
-        <span class="toggle-text">Tracking Data (24fps)</span>
-      </button>
-      <div class="panel-content" id="tracking-content">
-        <pre id="tracking-json"></pre>
+    <div id="multi-preview-content" class="multi-preview-content">
+      <div id="preview-list" class="preview-list">
+        <!-- Camera previews will be added here dynamically -->
       </div>
     </div>
   </div>
 
-  <!-- Main application -->
-  <script type="module" src="src/core/app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

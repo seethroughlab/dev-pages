@@ -1,2 +1,1 @@
-- Add a dropdown to select different camera configurations: 2-cam, 3-cam stagerred, etc.
-- Add some representation of users sticking out their arms, and it should affect their personal volume maybe?
+- Use a monospace font for the person labels

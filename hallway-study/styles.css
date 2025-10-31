@@ -1,0 +1,281 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overflow: hidden;
+  background-color: #0a0e14;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  display: block;
+}
+
+/* View Mode Toolbar */
+.view-toolbar {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  background: rgba(10, 14, 20, 0.9);
+  border: 1px solid #314150;
+  border-radius: 4px;
+  padding: 8px;
+  z-index: 1000;
+}
+
+.view-btn {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  color: #8899aa;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.view-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.view-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+.view-label {
+  font-size: 9px;
+  font-weight: bold;
+  font-family: monospace;
+  letter-spacing: 0.5px;
+}
+
+/* Transform Mode Toolbar */
+.transform-toolbar {
+  position: fixed;
+  top: 20px;
+  left: 100px;
+  display: flex;
+  gap: 8px;
+  background: rgba(10, 14, 20, 0.9);
+  border: 1px solid #314150;
+  border-radius: 4px;
+  padding: 8px;
+  z-index: 1000;
+}
+
+.transform-btn {
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  color: #8899aa;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.transform-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.transform-btn.active {
+  background: rgba(68, 138, 255, 0.2);
+  border-color: #448aff;
+  color: #448aff;
+}
+
+.transform-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+.key-hint {
+  font-size: 10px;
+  font-weight: bold;
+  font-family: monospace;
+  opacity: 0.7;
+}
+
+/* Camera Preview Panel */
+.preview-panel {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  background: rgba(10, 14, 20, 0.9);
+  border: 1px solid #314150;
+  border-radius: 4px;
+  padding: 10px;
+  display: none; /* Hidden by default, shown when camera is added */
+}
+
+.preview-panel.active {
+  display: block;
+}
+
+.preview-header {
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+#preview-canvas {
+  width: 320px;
+  height: 200px;
+  border: 1px solid #233140;
+}
+
+/* Multi-Camera Preview Panel */
+.multi-preview-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(10, 14, 20, 0.95);
+  border-top: 1px solid #314150;
+  z-index: 1000;
+  transition: transform 0.3s ease;
+}
+
+.multi-preview-panel.collapsed {
+  transform: translateY(calc(100% - 40px));
+}
+
+.multi-preview-header {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid #314150;
+  cursor: pointer;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: #8899aa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.toggle-btn:hover {
+  color: #ffffff;
+}
+
+.toggle-btn svg {
+  transition: transform 0.3s ease;
+}
+
+.multi-preview-panel.collapsed .toggle-btn svg {
+  transform: rotate(180deg);
+}
+
+.multi-preview-content {
+  height: 200px;
+  overflow: hidden;
+  transition: height 0.3s ease;
+}
+
+.multi-preview-panel.collapsed .multi-preview-content {
+  height: 0;
+}
+
+.preview-list {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 100%;
+}
+
+.preview-list::-webkit-scrollbar {
+  height: 8px;
+}
+
+.preview-list::-webkit-scrollbar-track {
+  background: #0a0e14;
+}
+
+.preview-list::-webkit-scrollbar-thumb {
+  background: #314150;
+  border-radius: 4px;
+}
+
+.preview-list::-webkit-scrollbar-thumb:hover {
+  background: #445566;
+}
+
+.camera-preview-item {
+  flex-shrink: 0;
+  background: rgba(20, 24, 30, 0.9);
+  border: 2px solid #314150;
+  border-radius: 4px;
+  padding: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.camera-preview-item:hover {
+  border-color: #448aff;
+  transform: translateY(-2px);
+}
+
+.camera-preview-item.selected {
+  border-color: #ff6b35;
+  box-shadow: 0 0 12px rgba(255, 107, 53, 0.3);
+}
+
+.camera-preview-item.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+.preview-item-header {
+  color: #8899aa;
+  font-size: 11px;
+  font-weight: bold;
+  margin-bottom: 4px;
+  text-align: center;
+  user-select: none;
+}
+
+.camera-preview-item.selected .preview-item-header {
+  color: #ff6b35;
+}
+
+.preview-item-canvas {
+  display: block;
+  width: 220px;
+  height: 138px;
+  border: 1px solid #233140;
+  border-radius: 2px;
+}

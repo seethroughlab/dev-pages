@@ -1,8 +1,8 @@
 // ===== Hallway model =====
 import * as THREE from 'three';
-import { defaults, FT } from '../core/config.js';
+import { defaults } from '../core/config.js';
 import { scene } from '../core/scene.js';
-import { createWavyGridTexture, floorTexture } from '../systems/floor-texture.js';
+// import { createWavyGridTexture, floorTexture } from '../systems/floor-texture.js'; // COMMENTED OUT: Floor visuals
 
 export const hall = { };
 
@@ -50,15 +50,15 @@ export function setCreatePeopleCallback(callback) {
 }
 
 export function buildHall() {
-  const L = defaults.hallway.length_ft * FT;
-  const W = defaults.hallway.width_ft * FT;
-  const H = defaults.hallway.height_ft * FT;
+  const L = defaults.hallway.length_m;
+  const W = defaults.hallway.width_m;
+  const H = defaults.hallway.height_m;
 
   // clear previous
   if (hall.group) scene.remove(hall.group);
   hall.group = new THREE.Group(); scene.add(hall.group);
 
-  // Simple floor for preview cameras (layer 0)
+  // Simple floor for both preview cameras and main camera
   const simpleFloorGeo = new THREE.PlaneGeometry(W, L, 1, 1);
   simpleFloorGeo.rotateX(-Math.PI/2);
   const simpleFloorMat = new THREE.MeshStandardMaterial({
@@ -69,30 +69,30 @@ export function buildHall() {
   const simpleFloor = new THREE.Mesh(simpleFloorGeo, simpleFloorMat);
   simpleFloor.position.y = 0;
   simpleFloor.receiveShadow = true;
-  simpleFloor.layers.set(0); // Only visible to preview cameras
+  simpleFloor.layers.enableAll(); // Visible to all cameras (layer 0 and 1)
   hall.group.add(simpleFloor);
 
-  // Animated floor with wavy grid texture for main camera (layer 1)
-  const floorGeo = new THREE.PlaneGeometry(W, L, 1, 1);
-  floorGeo.rotateX(-Math.PI/2);
-
-  // Create or reuse wavy grid texture
-  const texture = floorTexture || createWavyGridTexture();
-
-  // Texture is 600x2592 (width x height) matching floor UVs
-  // No repeat needed - texture matches floor aspect ratio
-  texture.repeat.set(1, 1);
-
-  const floorMat = new THREE.MeshStandardMaterial({
-    map: texture,
-    roughness: 0.9,
-    metalness: 0.0
-  });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.position.y = 0.001; // Slightly above simple floor to avoid z-fighting
-  floor.receiveShadow = true;
-  floor.layers.set(1); // Only visible to main camera
-  hall.group.add(floor);
+  // COMMENTED OUT: Animated floor with wavy grid texture - distracting from camera placement study
+  // const floorGeo = new THREE.PlaneGeometry(W, L, 1, 1);
+  // floorGeo.rotateX(-Math.PI/2);
+  //
+  // // Create or reuse wavy grid texture
+  // const texture = floorTexture || createWavyGridTexture();
+  //
+  // // Texture is 600x2592 (width x height) matching floor UVs
+  // // No repeat needed - texture matches floor aspect ratio
+  // texture.repeat.set(1, 1);
+  //
+  // const floorMat = new THREE.MeshStandardMaterial({
+  //   map: texture,
+  //   roughness: 0.9,
+  //   metalness: 0.0
+  // });
+  // const floor = new THREE.Mesh(floorGeo, floorMat);
+  // floor.position.y = 0.001; // Slightly above simple floor to avoid z-fighting
+  // floor.receiveShadow = true;
+  // floor.layers.set(1); // Only visible to main camera
+  // hall.group.add(floor);
 
   // Define half dimensions for lines
   const hw = W/2, hl = L/2;
@@ -143,7 +143,7 @@ export function buildHall() {
   lengthArrow.traverse(child => child.layers.set(1)); // Hide from preview cameras
   hall.group.add(lengthArrow);
 
-  const lengthLabel = createDimensionLabel(`${defaults.hallway.length_ft.toFixed(2)} ft`);
+  const lengthLabel = createDimensionLabel(`${defaults.hallway.length_m.toFixed(2)} m`);
   lengthLabel.position.set(-hw - dimOffset - 0.3, 0.5, 0);
   lengthLabel.layers.set(1); // Hide from preview cameras
   hall.group.add(lengthLabel);
@@ -160,7 +160,7 @@ export function buildHall() {
   widthArrow.traverse(child => child.layers.set(1)); // Hide from preview cameras
   hall.group.add(widthArrow);
 
-  const widthLabel = createDimensionLabel(`${defaults.hallway.width_ft.toFixed(2)} ft`);
+  const widthLabel = createDimensionLabel(`${defaults.hallway.width_m.toFixed(2)} m`);
   widthLabel.position.set(0, 0.5, -hl - dimOffset - 0.3);
   widthLabel.layers.set(1); // Hide from preview cameras
   hall.group.add(widthLabel);
@@ -177,7 +177,7 @@ export function buildHall() {
   heightArrow.traverse(child => child.layers.set(1)); // Hide from preview cameras
   hall.group.add(heightArrow);
 
-  const heightLabel = createDimensionLabel(`${defaults.hallway.height_ft.toFixed(2)} ft`);
+  const heightLabel = createDimensionLabel(`${defaults.hallway.height_m.toFixed(2)} m`);
   heightLabel.position.set(-hw - dimOffset - 0.3, H / 2, -hl - dimOffset - 0.3);
   heightLabel.layers.set(1); // Hide from preview cameras
   hall.group.add(heightLabel);

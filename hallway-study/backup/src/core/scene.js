@@ -14,9 +14,10 @@ export const previewHeight = 600; // 16:10 aspect ratio to match OAK-D Pro PoE s
 
 const canvasA = document.getElementById('camA-preview');
 const canvasB = document.getElementById('camB-preview');
+const canvasC = document.getElementById('camC-preview');
 
-if (!canvasA || !canvasB) {
-  console.error('Preview canvases not found!', canvasA, canvasB);
+if (!canvasA || !canvasB || !canvasC) {
+  console.error('Preview canvases not found!', canvasA, canvasB, canvasC);
 }
 
 export const previewRendererA = new THREE.WebGLRenderer({
@@ -36,6 +37,15 @@ export const previewRendererB = new THREE.WebGLRenderer({
 previewRendererB.setPixelRatio(Math.min(2, window.devicePixelRatio));
 previewRendererB.setSize(previewWidth, previewHeight, false);
 previewRendererB.setClearColor(0x0b0f14, 1);
+
+export const previewRendererC = new THREE.WebGLRenderer({
+  canvas: canvasC,
+  antialias: true,
+  alpha: false
+});
+previewRendererC.setPixelRatio(Math.min(2, window.devicePixelRatio));
+previewRendererC.setSize(previewWidth, previewHeight, false);
+previewRendererC.setClearColor(0x0b0f14, 1);
 
 // ===== Depth render targets =====
 // Create render targets with depth textures for both cameras
@@ -68,6 +78,21 @@ depthRenderTargetB.depthTexture.format = THREE.DepthFormat;
 depthRenderTargetB.depthTexture.type = THREE.UnsignedIntType;
 depthRenderTargetB.depthTexture.minFilter = THREE.NearestFilter;
 depthRenderTargetB.depthTexture.magFilter = THREE.NearestFilter;
+
+export const depthRenderTargetC = new THREE.WebGLRenderTarget(previewWidth, previewHeight, {
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+  format: THREE.RGBAFormat,
+  type: THREE.UnsignedByteType,
+  depthBuffer: true,
+  stencilBuffer: false,
+  generateMipmaps: false
+});
+depthRenderTargetC.depthTexture = new THREE.DepthTexture(previewWidth, previewHeight);
+depthRenderTargetC.depthTexture.format = THREE.DepthFormat;
+depthRenderTargetC.depthTexture.type = THREE.UnsignedIntType;
+depthRenderTargetC.depthTexture.minFilter = THREE.NearestFilter;
+depthRenderTargetC.depthTexture.magFilter = THREE.NearestFilter;
 
 // ===== Depth visualization shader =====
 // Oak-D style depth map: near = warm (red/orange), far = cool (blue/purple)
@@ -164,20 +189,34 @@ export const depthVisualizationMaterialB = new THREE.ShaderMaterial({
   }
 });
 
+export const depthVisualizationMaterialC = new THREE.ShaderMaterial({
+  vertexShader: depthVisualizationShader.vertexShader,
+  fragmentShader: depthVisualizationShader.fragmentShader,
+  uniforms: {
+    tDepth: { value: depthRenderTargetC.depthTexture },
+    cameraNear: { value: 0.7 },
+    cameraFar: { value: 12 }
+  }
+});
+
 // Create fullscreen quads for displaying depth visualization
 const quadGeometry = new THREE.PlaneGeometry(2, 2);
 export const depthQuadA = new THREE.Mesh(quadGeometry, depthVisualizationMaterialA);
 export const depthQuadB = new THREE.Mesh(quadGeometry, depthVisualizationMaterialB);
+export const depthQuadC = new THREE.Mesh(quadGeometry, depthVisualizationMaterialC);
 
 // Create orthographic cameras for rendering the depth quads
 export const depthQuadCameraA = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 export const depthQuadCameraB = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+export const depthQuadCameraC = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
 // Create scenes for the depth quads
 export const depthSceneA = new THREE.Scene();
 depthSceneA.add(depthQuadA);
 export const depthSceneB = new THREE.Scene();
 depthSceneB.add(depthQuadB);
+export const depthSceneC = new THREE.Scene();
+depthSceneC.add(depthQuadC);
 
 // Depth visualization mode toggle (false = RGB, true = depth)
 export let depthVisualizationMode = false;
@@ -191,11 +230,13 @@ export function setDepthVisualizationMode(enabled) {
 // Near/far clipping: 0.7m (min depth) to 12m (max depth)
 export const previewCameraA = new THREE.PerspectiveCamera(55, 16/10, 0.7, 12);
 export const previewCameraB = new THREE.PerspectiveCamera(55, 16/10, 0.7, 12);
+export const previewCameraC = new THREE.PerspectiveCamera(55, 16/10, 0.7, 12);
 
 // Use layer 1 for camera/projector visualizations (excluded from preview renders)
 // Layer 0 (default) for everything else
 previewCameraA.layers.set(0); // Only see scene objects, not visualization
 previewCameraB.layers.set(0);
+previewCameraC.layers.set(0);
 
 // ===== Scene =====
 export const scene = new THREE.Scene();

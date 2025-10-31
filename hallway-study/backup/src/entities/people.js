@@ -1197,8 +1197,8 @@ export class Person {
     // Clamp to hallway bounds
     this.xOffset = THREE.MathUtils.clamp(this.xOffset, -W/2 + 0.3, W/2 - 0.3);
 
-    // Update group position
-    this.group.position.set(this.xOffset, 0, origin.z + this.z);
+    // Update group position (slightly elevated to avoid z-fighting with floor)
+    this.group.position.set(this.xOffset, 0.005, origin.z + this.z);
 
     // Make visible after first position update (prevents flash at origin)
     if (this.isFirstUpdate) {

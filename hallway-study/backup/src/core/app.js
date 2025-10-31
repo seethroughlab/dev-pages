@@ -2,16 +2,16 @@
 // Imports from modules
 import * as THREE from 'three';
 import { displaySettings } from './config.js';
-import { renderer, scene, camera, controls, setupResizeHandler, previewCameraA, previewCameraB, previewRendererA, previewRendererB, depthRenderTargetA, depthRenderTargetB, depthVisualizationMode, depthSceneA, depthSceneB, depthQuadCameraA, depthQuadCameraB } from './scene.js';
-import { updateWavyGridTexture } from '../systems/floor-texture.js';
+import { renderer, scene, camera, controls, setupResizeHandler, previewCameraA, previewCameraB, previewCameraC, previewRendererA, previewRendererB, previewRendererC, depthRenderTargetA, depthRenderTargetB, depthRenderTargetC, depthVisualizationMode, depthSceneA, depthSceneB, depthSceneC, depthQuadCameraA, depthQuadCameraB, depthQuadCameraC } from './scene.js';
+// import { updateWavyGridTexture } from '../systems/floor-texture.js'; // COMMENTED OUT: Distracting visuals
 import { hall, buildHall, setBuildHeatmapCallback, setCreatePeopleCallback } from '../entities/hallway.js';
 import { buildHeatmap, updateHeatmap, updateHeatmapVisibility, setPointInFrustum2D, setCamerasArray as setHeatmapCameras } from '../systems/heatmap.js';
-import { cameras, addCamera, seedCameras, setUpdateHeatmapCallback } from '../entities/camera-node.js';
+import { cameras, addCamera, seedCameras, clearCameras, setUpdateHeatmapCallback } from '../entities/camera-node.js';
 import { projectors, createProjectors } from '../entities/projector-node.js';
 import { pointInFrustum2D, updateRaycastVisualization } from '../systems/visibility.js';
-import { people, createPeople, updatePeople, generateTrackingJSON, updateMusicInfoDisplay, toggleAudio, isAudioEnabled } from '../entities/people.js';
+import { people, createPeople, updatePeople, generateTrackingJSON /*, updateMusicInfoDisplay, toggleAudio, isAudioEnabled */ } from '../entities/people.js'; // COMMENTED OUT: Audio features
 import { setupGUI, setCallbacks as setGUICallbacks, addCameraToGUI, gui } from '../ui/gui.js';
-import { saveSettings, loadSettings, exportJSON, importJSON, setCamerasArray as setStorageCameras, setProjectorsArray } from '../ui/storage.js';
+import { saveSettings, loadSettings, exportJSON, importJSON, setCamerasArray as setStorageCameras, setProjectorsArray, setActiveConfiguration, getActiveConfiguration } from '../ui/storage.js';
 
 // ===== Setup callbacks between modules =====
 setBuildHeatmapCallback(buildHeatmap);
@@ -29,6 +29,56 @@ controls.addEventListener('change', () => {
   cameraMoveSaveTimeout = setTimeout(saveSettings, 1000); // Save 1 second after user stops moving
 });
 
+// Helper function to add camera from configuration
+window.addCameraFromConfig = function(camConfig) {
+  const cam = addCamera(camConfig);
+  return cam;
+};
+
+// Function to add a new camera to the scene
+function addNewCamera() {
+  // Generate unique camera name
+  const existingNames = cameras.map(c => c.name);
+  let newIndex = cameras.length + 1;
+  let newName = `Cam ${String.fromCharCode(64 + newIndex)}`;
+
+  // Make sure name is unique
+  while (existingNames.includes(newName)) {
+    newIndex++;
+    newName = `Cam ${String.fromCharCode(64 + newIndex)}`;
+  }
+
+  // Create camera at center, near ceiling
+  const cam = addCamera({
+    name: newName,
+    pos_m: [0, defaults.hallway.height_m - 0.5, 0],
+    yawDeg: 0,
+    pitchDeg: -10,
+    rollDeg: 0,
+    hFovDeg: 80,
+    range_m: 12
+  });
+
+  // Add to GUI
+  addCameraToGUI(cam);
+
+  // Update heatmap
+  updateHeatmap();
+
+  // Save settings
+  saveSettings();
+
+  return cam;
+}
+
+// ===== Init =====
+buildHall();
+createProjectors(); // Add the 3 Epson projectors
+
+// Try to load saved settings first to get the active configuration
+const loadedData = loadSettings();
+const activeConfig = loadedData?.activeConfiguration || 'Untitled';
+
 // ===== Setup GUI with callbacks =====
 setGUICallbacks({
   cameras,
@@ -39,16 +89,13 @@ setGUICallbacks({
   updateHeatmapVisibility,
   createPeople,
   seedCameras,
-  addCamera: addCameraToGUI
+  addCamera: addCameraToGUI,
+  clearCameras,
+  addCameraNode: addNewCamera
 });
-setupGUI();
+setupGUI(activeConfig); // Pass the active configuration to GUI
 
-// ===== Init =====
-buildHall();
-createProjectors(); // Add the 3 Epson projectors
-
-// Try to load saved settings, otherwise load defaults from JSON
-const loadedData = loadSettings();
+// Load settings and cameras
 if (loadedData && loadedData.cameras && loadedData.cameras.length > 0) {
   // Load cameras from saved settings (using hardcoded defaults for locked FOV properties)
   cameras.splice(0, cameras.length);
@@ -60,8 +107,7 @@ if (loadedData && loadedData.cameras && loadedData.cameras.length > 0) {
       pitchDeg: cfg.pitch !== undefined ? cfg.pitch : -8,
       rollDeg: cfg.roll !== undefined ? cfg.roll : 0,
       hFovDeg: 80,   // Hardcoded - FOV locked to match OAK-D Pro PoE stereo cameras
-      range_m: 12,   // Hardcoded - range locked
-      end: cfg.end
+      range_m: 12    // Hardcoded - range locked
     });
   });
 
@@ -85,93 +131,61 @@ if (loadedData && loadedData.cameras && loadedData.cameras.length > 0) {
     setTimeout(() => { status.textContent = ''; }, 2000);
   }
 } else {
-  // No localStorage - load defaults from JSON file
-  fetch('./default-settings.json')
-    .then(response => response.json())
-    .then(data => {
-      if (window.loadDefaultSettings) {
-        window.loadDefaultSettings(data);
-      }
-    })
-    .catch(err => {
-      console.error('Failed to load default settings, using hardcoded fallback:', err);
-      seedCameras();
-      cameras.forEach(addCameraToGUI);
-      updateHeatmap();
-      createPeople();
-      gui.controllersRecursive().forEach(c => c.updateDisplay());
-    });
+  // No localStorage - start with empty scene
+  // User can add cameras using the "Add Camera" button
+  console.log('No saved configuration found. Use "Add Camera" button to add cameras.');
+
+  // Update GUI displays
+  gui.controllersRecursive().forEach(c => c.updateDisplay());
 }
 
 // ===== Camera preview updates =====
 function updateCameraPreviews() {
   if (cameras.length === 0) return; // No cameras yet
 
-  // Find Camera A and B
+  // Find cameras A, B, and C
   const camA = cameras.find(c => c.name === 'Cam A');
   const camB = cameras.find(c => c.name === 'Cam B');
+  const camC = cameras.find(c => c.name === 'Cam C');
 
-  if (camA && camA.group) {
+  // Helper function to render a camera preview
+  function renderCameraPreview(cam, previewCam, previewRenderer, depthRenderTarget, depthScene, depthQuadCamera) {
+    if (!cam || !cam.group) return;
+
     // Update world matrices
     scene.updateMatrixWorld();
-    camA.group.updateMatrixWorld(true);
+    cam.group.updateMatrixWorld(true);
 
     // Set preview camera position to match simulated camera
-    previewCameraA.position.copy(camA.group.position);
+    previewCam.position.copy(cam.group.position);
 
     // Calculate a point in front of the camera based on its forward direction
     const forward = new THREE.Vector3(0, 0, 1); // Local forward direction
-    forward.applyQuaternion(camA.group.quaternion); // Transform to world space
-    const lookAtTarget = new THREE.Vector3().addVectors(camA.group.position, forward);
+    forward.applyQuaternion(cam.group.quaternion); // Transform to world space
+    const lookAtTarget = new THREE.Vector3().addVectors(cam.group.position, forward);
 
     // Use lookAt to set the camera orientation
-    previewCameraA.lookAt(lookAtTarget);
-    previewCameraA.updateMatrixWorld();
+    previewCam.lookAt(lookAtTarget);
+    previewCam.updateMatrixWorld();
 
     if (depthVisualizationMode) {
       // Render to depth render target first
-      previewRendererA.setRenderTarget(depthRenderTargetA);
-      previewRendererA.render(scene, previewCameraA);
-      previewRendererA.setRenderTarget(null);
+      previewRenderer.setRenderTarget(depthRenderTarget);
+      previewRenderer.render(scene, previewCam);
+      previewRenderer.setRenderTarget(null);
 
       // Then render the depth visualization to the canvas
-      previewRendererA.render(depthSceneA, depthQuadCameraA);
+      previewRenderer.render(depthScene, depthQuadCamera);
     } else {
-      // Render RGB from Camera A's perspective
-      previewRendererA.render(scene, previewCameraA);
+      // Render RGB from camera's perspective
+      previewRenderer.render(scene, previewCam);
     }
   }
 
-  if (camB && camB.group) {
-    // Update world matrices
-    scene.updateMatrixWorld();
-    camB.group.updateMatrixWorld(true);
-
-    // Set preview camera position to match simulated camera
-    previewCameraB.position.copy(camB.group.position);
-
-    // Calculate a point in front of the camera based on its forward direction
-    const forward = new THREE.Vector3(0, 0, 1); // Local forward direction
-    forward.applyQuaternion(camB.group.quaternion); // Transform to world space
-    const lookAtTarget = new THREE.Vector3().addVectors(camB.group.position, forward);
-
-    // Use lookAt to set the camera orientation
-    previewCameraB.lookAt(lookAtTarget);
-    previewCameraB.updateMatrixWorld();
-
-    if (depthVisualizationMode) {
-      // Render to depth render target first
-      previewRendererB.setRenderTarget(depthRenderTargetB);
-      previewRendererB.render(scene, previewCameraB);
-      previewRendererB.setRenderTarget(null);
-
-      // Then render the depth visualization to the canvas
-      previewRendererB.render(depthSceneB, depthQuadCameraB);
-    } else {
-      // Render RGB from Camera B's perspective
-      previewRendererB.render(scene, previewCameraB);
-    }
-  }
+  // Render all cameras
+  renderCameraPreview(camA, previewCameraA, previewRendererA, depthRenderTargetA, depthSceneA, depthQuadCameraA);
+  renderCameraPreview(camB, previewCameraB, previewRendererB, depthRenderTargetB, depthSceneB, depthQuadCameraB);
+  renderCameraPreview(camC, previewCameraC, previewRendererC, depthRenderTargetC, depthSceneC, depthQuadCameraC);
 }
 
 // ===== Sidebar Panel Toggles =====
@@ -217,15 +231,15 @@ document.querySelectorAll('.panel-toggle').forEach(toggle => {
   });
 });
 
-// ===== Audio Toggle Button =====
-const audioToggleBtn = document.getElementById('audio-toggle');
-if (audioToggleBtn) {
-  audioToggleBtn.addEventListener('click', () => {
-    const enabled = toggleAudio();
-    audioToggleBtn.textContent = enabled ? 'Disable Audio' : 'Enable Audio';
-    audioToggleBtn.classList.toggle('enabled', enabled);
-  });
-}
+// ===== Audio Toggle Button ===== COMMENTED OUT: Audio distracting from camera placement study
+// const audioToggleBtn = document.getElementById('audio-toggle');
+// if (audioToggleBtn) {
+//   audioToggleBtn.addEventListener('click', () => {
+//     const enabled = toggleAudio();
+//     audioToggleBtn.textContent = enabled ? 'Disable Audio' : 'Enable Audio';
+//     audioToggleBtn.classList.toggle('enabled', enabled);
+//   });
+// }
 
 // ===== Render loop =====
 let lastTime = performance.now();
@@ -234,9 +248,9 @@ function animate(){
   const deltaTime = Math.min((now - lastTime) / 1000, 0.1); // Cap at 0.1s to prevent huge jumps
   lastTime = now;
 
-  updateWavyGridTexture(now / 1000, deltaTime, hall, people);
+  // updateWavyGridTexture(now / 1000, deltaTime, hall, people); // COMMENTED OUT: Distracting floor visuals
   updatePeople(deltaTime, cameras);
-  updateMusicInfoDisplay(); // Update key and BPM display
+  // updateMusicInfoDisplay(); // COMMENTED OUT: Audio features - Update key and BPM display
   updateRaycastVisualization(); // Draw raycast lines after visibility checks
   controls.update();
   renderer.render(scene, camera);

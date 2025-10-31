@@ -1,26 +1,25 @@
 // ===== Camera nodes & FOV wedges =====
 import * as THREE from 'three';
-import { defaults, displaySettings, FT } from '../core/config.js';
+import { defaults, displaySettings } from '../core/config.js';
 import { scene } from '../core/scene.js';
 import { hall } from './hallway.js';
 
 export class CamNode {
   constructor(opts){
-    const defaultHeight = defaults.hallway.height_ft * FT - 0.5; // 0.5m below ceiling
-    const { name = 'Camera', pos_m = [0, defaultHeight, 0.2], yawDeg = 0, pitchDeg = -10, rollDeg = 0, hFovDeg = 80, vAspect = 10/16, range_m = 12, minRange_m = 0.7, baseline_m = 0.075, end = 'near' } = opts || {};
+    const defaultHeight = defaults.hallway.height_m - 0.5; // 0.5m below ceiling
+    const { name = 'Camera', pos_m = [0, defaultHeight, 0], yawDeg = 0, pitchDeg = -10, rollDeg = 0, hFovDeg = 80, vAspect = 10/16, range_m = 12, minRange_m = 0.7, baseline_m = 0.075 } = opts || {};
     this.name = name; this.pos = new THREE.Vector3(...pos_m); this.yaw = yawDeg; this.pitch = pitchDeg; this.roll = rollDeg;
-    this.hfov = hFovDeg; this.vaspect = vAspect; this.range = range_m; this.minRange = minRange_m; this.baseline = baseline_m; this.end = end; // 'near' or 'far'
+    this.hfov = hFovDeg; this.vaspect = vAspect; this.range = range_m; this.minRange = minRange_m; this.baseline = baseline_m;
     this.group = new THREE.Group(); scene.add(this.group);
     this.build();
   }
   build(){
-    const { W, L } = hall.bounds; const origin = hall.origin;
-    const zBase = (this.end === 'far') ? origin.z + L : origin.z;
-    // Allow cameras to extend 5m outside hallway (no Z clamping)
+    const { W } = hall.bounds;
+    // Use absolute world coordinates
     this.group.position.set(
       THREE.MathUtils.clamp(this.pos.x, -W/2, W/2),
       THREE.MathUtils.clamp(this.pos.y, 0, 50),
-      this.pos.z + zBase
+      this.pos.z
     );
     this.group.rotation.set(THREE.MathUtils.degToRad(this.pitch), THREE.MathUtils.degToRad(this.yaw), THREE.MathUtils.degToRad(this.roll));
 
@@ -275,10 +274,19 @@ export function addCamera(opts){
   return c;
 }
 
+// Clear all cameras from scene and array
+export function clearCameras(){
+  cameras.forEach(cam => {
+    scene.remove(cam.group);
+  });
+  cameras.splice(0, cameras.length);
+}
+
 // default two end cameras
 export function seedCameras(){
   cameras.splice(0, cameras.length);
-  const camHeight = defaults.hallway.height_ft * FT - 0.5; // 0.5m below ceiling
-  addCamera({ name: 'Cam A', pos_m: [0, camHeight, 0.2], yawDeg: 0, pitchDeg: -8, hFovDeg: 80, end: 'near' });
-  addCamera({ name: 'Cam B', pos_m: [0, camHeight, -0.2], yawDeg: 180, pitchDeg: -8, hFovDeg: 80, end: 'far' });
+  const camHeight = defaults.hallway.height_m - 0.5; // 0.5m below ceiling
+  const hallLength = defaults.hallway.length_m;
+  addCamera({ name: 'Cam A', pos_m: [0, camHeight, -hallLength/2 + 0.5], yawDeg: 0, pitchDeg: -8, hFovDeg: 80 });
+  addCamera({ name: 'Cam B', pos_m: [0, camHeight, hallLength/2 - 0.5], yawDeg: 180, pitchDeg: -8, hFovDeg: 80 });
 }

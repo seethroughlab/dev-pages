@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hallway Coverage Planner — Three.js</title>
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Import map for Three.js r180 -->
+  <script type="importmap"> 
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- COMMENTED OUT: Music Info Display - Distracting from camera placement study
+  <div class="music-info">
+    <button id="audio-toggle" class="audio-toggle-btn">Enable Audio</button>
+    <div class="music-key">
+      <span class="music-label">KEY</span>
+      <span class="music-value" id="music-key">--</span>
+    </div>
+    <div class="music-bpm">
+      <span class="music-label">BPM</span>
+      <span class="music-value" id="music-bpm">--</span>
+    </div>
+  </div>
+  -->
+
+  <div class="hud">
+    <span id="status"></span>
+  </div>
+
+  <!-- Left Sidebar with collapsible panels -->
+  <div class="sidebar">
+    <!-- Camera Specs Panel -->
+    <div class="panel collapsed" data-panel-id="camera-specs">
+      <button class="panel-toggle" data-target="specs-content">
+        <span class="toggle-icon">▼</span>
+        <span class="toggle-text">Camera Specs</span>
+      </button>
+      <div class="panel-content" id="specs-content">
+        <h3>OAK-D Pro PoE</h3>
+        <h4>Stereo Depth Cameras (OV9282)</h4>
+
+        <div class="spec-group">
+          <div class="spec-label">Resolution</div>
+          <div class="spec-value">1280 × 800 (1MP)</div>
+        </div>
+
+        <div class="spec-group">
+          <div class="spec-label">Aspect Ratio</div>
+          <div class="spec-value">16:10</div>
+        </div>
+
+        <div class="spec-group">
+          <div class="spec-label">Field of View</div>
+          <div class="spec-value">
+            H: 80° / V: 55° / D: 89.5°
+          </div>
+        </div>
+
+        <div class="spec-group">
+          <div class="spec-label">Stereo Baseline</div>
+          <div class="spec-value">7.5 cm</div>
+        </div>
+
+        <div class="spec-group">
+          <div class="spec-label">Depth Range (Ideal)</div>
+          <div class="spec-value">70 cm – 12 m</div>
+        </div>
+
+        <div class="spec-group">
+          <div class="spec-label">Min Depth (Extended)</div>
+          <div class="spec-value">~20 cm</div>
+        </div>
+
+        <div class="spec-group">
+          <div class="spec-label">Max Frame Rate</div>
+          <div class="spec-value">120 FPS</div>
+        </div>
+
+        <div class="spec-group">
+          <div class="spec-label">Shutter Type</div>
+          <div class="spec-value">Global</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera A Preview Panel -->
+    <div class="panel collapsed" data-panel-id="camera-a">
+      <button class="panel-toggle" data-target="camA-content">
+        <span class="toggle-icon">▼</span>
+        <span class="toggle-text">Camera A</span>
+      </button>
+      <div class="panel-content preview-panel-content" id="camA-content">
+        <canvas id="camA-preview"></canvas>
+      </div>
+    </div>
+
+    <!-- Camera B Preview Panel -->
+    <div class="panel collapsed" data-panel-id="camera-b">
+      <button class="panel-toggle" data-target="camB-content">
+        <span class="toggle-icon">▼</span>
+        <span class="toggle-text">Camera B</span>
+      </button>
+      <div class="panel-content preview-panel-content" id="camB-content">
+        <canvas id="camB-preview"></canvas>
+      </div>
+    </div>
+
+    <!-- Camera C Preview Panel -->
+    <div class="panel collapsed" data-panel-id="camera-c">
+      <button class="panel-toggle" data-target="camC-content">
+        <span class="toggle-icon">▼</span>
+        <span class="toggle-text">Camera C</span>
+      </button>
+      <div class="panel-content preview-panel-content" id="camC-content">
+        <canvas id="camC-preview"></canvas>
+      </div>
+    </div>
+
+    <!-- Tracking JSON Debug Panel -->
+    <div class="panel collapsed" data-panel-id="tracking-data">
+      <button class="panel-toggle" data-target="tracking-content">
+        <span class="toggle-icon">▼</span>
+        <span class="toggle-text">Tracking Data (24fps)</span>
+      </button>
+      <div class="panel-content" id="tracking-content">
+        <pre id="tracking-json"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main application -->
+  <script type="module" src="src/core/app.js"></script>
+</body>
+</html>
