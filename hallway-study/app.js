@@ -323,7 +323,7 @@ peopleManager.setCount(3); // Start with 3 people
 peopleManager.setEnabled(true);
 
 // ===== Camera System =====
-const cameraManager = new CameraManager(scene, hallway);
+const cameraManager = new CameraManager(scene, hallway, renderer);
 
 // ===== Raycast Visualization =====
 const raycastLines = new THREE.Group();
@@ -498,8 +498,349 @@ const raycaster = new THREE.Raycaster();
 raycaster.layers.set(1); // Only raycast against layer 1 (cameras and UI elements)
 const mouse = new THREE.Vector2();
 
+// ===== Document Management System =====
+let documentDirty = false;
+let documentName = 'Untitled';
+
+function serializeDocument() {
+  return {
+    version: 1,
+    name: documentName,
+    timestamp: Date.now(),
+    cameras: cameraManager.cameras.map(cam => ({
+      id: cam.id,
+      name: cam.name,
+      pos: { x: cam.pos.x, y: cam.pos.y, z: cam.pos.z },
+      yaw: cam.yaw,
+      pitch: cam.pitch,
+      roll: cam.roll
+    })),
+    orbitControls: {
+      position: {
+        x: camera.position.x,
+        y: camera.position.y,
+        z: camera.position.z
+      },
+      target: {
+        x: activeControls.target.x,
+        y: activeControls.target.y,
+        z: activeControls.target.z
+      }
+    },
+    settings: {
+      peopleCount: peopleSettings.count,
+      showFrustums: transformSettings.showFrustums,
+      showRaycasts: transformSettings.showRaycasts,
+      isPerspective: isPerspective
+    }
+  };
+}
+
+function deserializeDocument(data) {
+  if (!data || data.version !== 1) {
+    console.error('Invalid or unsupported document version');
+    return false;
+  }
+
+  // Clear existing cameras (with GUI and preview cleanup)
+  while (cameraManager.cameras.length > 0) {
+    const cam = cameraManager.cameras[0];
+    if (cam.guiFolder) {
+      cam.guiFolder.destroy();
+    }
+    removeCameraPreviewItem(cam);
+    cameraManager.removeCamera(cam);
+  }
+
+  // Deselect any active camera
+  deselectAllCameras();
+
+  // Restore cameras
+  data.cameras.forEach(camData => {
+    const cam = cameraManager.addCamera({
+      name: camData.name,
+      pos_m: [camData.pos.x, camData.pos.y, camData.pos.z],
+      yawDeg: camData.yaw,
+      pitchDeg: camData.pitch,
+      rollDeg: camData.roll
+    });
+
+    // Set frustum visibility
+    if (cam.frustumHelper) {
+      cam.frustumHelper.visible = data.settings.showFrustums;
+    }
+    if (cam.frustumMesh) {
+      cam.frustumMesh.visible = data.settings.showFrustums;
+    }
+
+    addCameraToGUI(cam);
+    createCameraPreviewItem(cam);
+  });
+
+  // Restore orbit controls
+  camera.position.set(
+    data.orbitControls.position.x,
+    data.orbitControls.position.y,
+    data.orbitControls.position.z
+  );
+  activeControls.target.set(
+    data.orbitControls.target.x,
+    data.orbitControls.target.y,
+    data.orbitControls.target.z
+  );
+  activeControls.update();
+
+  // Restore settings
+  peopleSettings.count = data.settings.peopleCount;
+  peopleManager.setCount(data.settings.peopleCount);
+
+  transformSettings.showFrustums = data.settings.showFrustums;
+  transformSettings.showRaycasts = data.settings.showRaycasts;
+  setShowRays(data.settings.showRaycasts);
+
+  // Restore camera mode
+  if (data.settings.isPerspective !== isPerspective) {
+    toggleCameraMode();
+  }
+
+  documentName = data.name || 'Untitled';
+  documentDirty = false;
+  updateDocumentTitle();
+
+  return true;
+}
+
+function getAllDocumentNames() {
+  const names = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key.startsWith('hallway-study-doc:')) {
+      names.push(key.replace('hallway-study-doc:', ''));
+    }
+  }
+  return names.sort();
+}
+
+function saveDocument() {
+  if (documentName === 'Untitled' || !documentName) {
+    return saveDocumentAs();
+  }
+
+  const data = serializeDocument();
+  try {
+    localStorage.setItem(`hallway-study-doc:${documentName}`, JSON.stringify(data));
+    documentDirty = false;
+    updateDocumentTitle();
+    console.log(`Document "${documentName}" saved to localStorage`);
+
+    // Refresh dropdown to show updated document list
+    if (typeof refreshDocumentDropdown === 'function') {
+      refreshDocumentDropdown();
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Failed to save document:', e);
+    alert('Failed to save document. localStorage might be full or disabled.');
+    return false;
+  }
+}
+
+function saveDocumentAs() {
+  const newName = prompt('Enter document name:', documentName);
+  if (!newName || newName.trim() === '') return false;
+
+  const trimmedName = newName.trim();
+
+  // Check if document already exists
+  const existingNames = getAllDocumentNames();
+  if (existingNames.includes(trimmedName) && trimmedName !== documentName) {
+    const overwrite = confirm(`Document "${trimmedName}" already exists. Overwrite?`);
+    if (!overwrite) return false;
+  }
+
+  documentName = trimmedName;
+  return saveDocument();
+}
+
+function newDocument() {
+  if (documentDirty) {
+    const confirmed = confirm('You have unsaved changes. Create new document anyway?');
+    if (!confirmed) return;
+  }
+
+  // Clear all cameras (with GUI and preview cleanup)
+  while (cameraManager.cameras.length > 0) {
+    const cam = cameraManager.cameras[0];
+    if (cam.guiFolder) {
+      cam.guiFolder.destroy();
+    }
+    removeCameraPreviewItem(cam);
+    cameraManager.removeCamera(cam);
+  }
+
+  // Deselect any active camera
+  deselectAllCameras();
+
+  // Reset settings
+  peopleSettings.count = 3;
+  peopleManager.setCount(3);
+
+  documentName = 'Untitled';
+  documentDirty = false;
+  updateDocumentTitle();
+
+  // Refresh dropdown to show Untitled
+  if (typeof refreshDocumentDropdown === 'function') {
+    refreshDocumentDropdown();
+  }
+
+  console.log('New document created');
+}
+
+function markDocumentDirty() {
+  if (!documentDirty) {
+    documentDirty = true;
+    updateDocumentTitle();
+  }
+}
+
+function updateDocumentTitle() {
+  const dirtyMarker = documentDirty ? '• ' : '';
+  gui.title(`${dirtyMarker}${documentName} - Hallway Study`);
+}
+
+// Warn before closing with unsaved changes
+window.addEventListener('beforeunload', (e) => {
+  if (documentDirty) {
+    e.preventDefault();
+    // Modern browsers will show a generic "unsaved changes" dialog
+  }
+});
+
+// Auto-save every 30 seconds
+setInterval(() => {
+  if (documentDirty && documentName !== 'Untitled') {
+    saveDocument();
+    console.log('Auto-saved');
+  }
+}, 30000);
+
+
+// Always start with a fresh document - user can open saved docs via dropdown
+
 // ===== GUI Setup =====
 const gui = new GUI({ title: 'Hallway Study' });
+updateDocumentTitle();
+
+// File Menu
+const fileFolder = gui.addFolder('File');
+
+// Document dropdown
+const documentDropdownSettings = { currentDocument: documentName };
+let documentDropdownController = null;
+
+function refreshDocumentDropdown() {
+  const savedDocs = getAllDocumentNames();
+  const choices = {};
+
+  // Add current document if it's Untitled (not in saved list)
+  if (documentName === 'Untitled' || !savedDocs.includes(documentName)) {
+    choices['Untitled'] = 'Untitled';
+  }
+
+  // Add all saved documents
+  savedDocs.forEach(name => {
+    choices[name] = name;
+  });
+
+  // Remove old controller if it exists
+  if (documentDropdownController) {
+    documentDropdownController.destroy();
+  }
+
+  // Update the setting value
+  documentDropdownSettings.currentDocument = documentName;
+
+  // Create new controller with updated choices
+  documentDropdownController = fileFolder.add(documentDropdownSettings, 'currentDocument', choices)
+    .name('Open Document')
+    .onChange((selectedDoc) => {
+      if (selectedDoc === documentName) return; // Already open
+
+      if (documentDirty) {
+        const save = confirm('You have unsaved changes. Save before switching documents?');
+        if (save) {
+          saveDocument();
+        }
+      }
+
+      try {
+        const saved = localStorage.getItem(`hallway-study-doc:${selectedDoc}`);
+        if (!saved) {
+          alert(`Document "${selectedDoc}" not found.`);
+          // Reset dropdown to current document
+          documentDropdownSettings.currentDocument = documentName;
+          documentDropdownController.updateDisplay();
+          return;
+        }
+
+        const data = JSON.parse(saved);
+        deserializeDocument(data);
+        refreshDocumentDropdown(); // Refresh to update current selection
+      } catch (e) {
+        console.error('Failed to load document:', e);
+        alert('Failed to load document. The saved data might be corrupted.');
+        // Reset dropdown to current document
+        documentDropdownSettings.currentDocument = documentName;
+        documentDropdownController.updateDisplay();
+      }
+    });
+}
+
+refreshDocumentDropdown();
+
+fileFolder.add({ newDoc: newDocument }, 'newDoc').name('New Document');
+fileFolder.add({ save: saveDocument }, 'save').name('Save (Ctrl+S)');
+fileFolder.add({ saveAs: saveDocumentAs }, 'saveAs').name('Save As...');
+fileFolder.add({
+  export: () => {
+    const data = serializeDocument();
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${documentName}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+}, 'export').name('Export JSON');
+fileFolder.add({
+  import: () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          deserializeDocument(data);
+          refreshDocumentDropdown(); // Refresh after import
+        } catch (err) {
+          alert('Failed to import document. Invalid JSON file.');
+          console.error(err);
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
+}, 'import').name('Import JSON');
 
 // People Simulation Panel
 const peopleFolder = gui.addFolder('People Simulation');
@@ -509,6 +850,7 @@ const peopleSettings = {
 
 peopleFolder.add(peopleSettings, 'count', 0, 12, 1).name('Count').onChange((value) => {
   peopleManager.setCount(value);
+  markDocumentDirty();
 });
 
 peopleFolder.open();
@@ -537,8 +879,16 @@ function setTransformMode(mode) {
 translateBtn.addEventListener('click', () => setTransformMode('translate'));
 rotateBtn.addEventListener('click', () => setTransformMode('rotate'));
 
-// Keyboard shortcuts for transform modes (like Unity)
+// Keyboard shortcuts
 window.addEventListener('keydown', (event) => {
+  // Ctrl+S to save
+  if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+    event.preventDefault();
+    saveDocument();
+    return;
+  }
+
+  // Transform modes (like Unity)
   if (event.key === 'w' || event.key === 'W') {
     setTransformMode('translate');
   } else if (event.key === 'e' || event.key === 'E') {
@@ -561,10 +911,12 @@ camerasFolder.add(transformSettings, 'showFrustums').name('Show Frustums').onCha
       cam.frustumMesh.visible = value;
     }
   });
+  markDocumentDirty();
 });
 
 camerasFolder.add(transformSettings, 'showRaycasts').name('Show Raycasts').onChange((value) => {
   setShowRays(value);
+  markDocumentDirty();
 });
 
 // Function to select a camera
@@ -660,6 +1012,9 @@ camerasFolder.add({
 
     // Automatically select the new camera
     selectCamera(newCamera);
+
+    // Mark document as dirty
+    markDocumentDirty();
   }
 }, 'addCamera').name('Add Camera');
 
@@ -687,23 +1042,29 @@ function addCameraToGUI(cam) {
   // Position controls (number inputs with drag-to-change, no min/max constraints)
   camFolder.add(cam.pos, 'x').name('X (m)').step(0.01).decimals(4).onChange(() => {
     cam.build();
+    markDocumentDirty();
   });
   camFolder.add(cam.pos, 'y').name('Y (m)').step(0.01).decimals(4).onChange(() => {
     cam.build();
+    markDocumentDirty();
   });
   camFolder.add(cam.pos, 'z').name('Z (m)').step(0.01).decimals(4).onChange(() => {
     cam.build();
+    markDocumentDirty();
   });
 
   // Rotation controls
   camFolder.add(cam, 'yaw', -180, 180, 1).name('Yaw (°)').onChange(() => {
     cam.build();
+    markDocumentDirty();
   });
   camFolder.add(cam, 'pitch', -90, 90, 1).name('Pitch (°)').onChange(() => {
     cam.build();
+    markDocumentDirty();
   });
   camFolder.add(cam, 'roll', -180, 180, 1).name('Roll (°)').onChange(() => {
     cam.build();
+    markDocumentDirty();
   });
 
   // Remove camera button
@@ -719,6 +1080,9 @@ function addCameraToGUI(cam) {
 
       cameraManager.removeCamera(cam);
       camFolder.destroy();
+
+      // Mark document as dirty
+      markDocumentDirty();
     }
   }, 'remove').name('Remove');
 
@@ -848,6 +1212,9 @@ function animate() {
 
   // Update people simulation (pass cameras for visibility detection)
   peopleManager.update(deltaTime, cameraManager.cameras);
+
+  // Update cameras (for pulsing boundary violation lines)
+  cameraManager.cameras.forEach(cam => cam.update(deltaTime));
 
   // Update interactive floor texture
   updateFloorTexture(now / 1000, deltaTime, hallway, peopleManager.people);

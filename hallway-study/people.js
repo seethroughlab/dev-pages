@@ -233,6 +233,11 @@ export class Person {
           slice.material.color.setHex(0xff4466); // Red if not visible
         }
       }
+    } else {
+      // No cameras - all slices are red (not visible)
+      for (let i = 0; i < this.slices.length; i++) {
+        this.slices[i].material.color.setHex(0xff4466);
+      }
     }
 
     // Update label

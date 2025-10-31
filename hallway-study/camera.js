@@ -1,5 +1,8 @@
 // ===== OAK-D Pro PoE Camera Module =====
 import * as THREE from 'three';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 
 // OAK-D Pro PoE Stereo Depth Camera Specs (OV9282)
 const CAMERA_SPECS = {
@@ -14,7 +17,7 @@ const CAMERA_SPECS = {
 let nextCameraId = 1;
 
 export class Camera {
-  constructor(scene, hallway, opts = {}) {
+  constructor(scene, hallway, renderer, opts = {}) {
     const {
       name = `Cam ${String.fromCharCode(64 + nextCameraId)}`,
       pos_m = [0, hallway.height_m - 0.5, 0],
@@ -27,6 +30,7 @@ export class Camera {
     this.name = name;
     this.scene = scene;
     this.hallway = hallway;
+    this.renderer = renderer;
 
     // Position
     this.pos = new THREE.Vector3(...pos_m);
@@ -116,6 +120,16 @@ export class Camera {
       0.03
     );
     this.group.add(arrowHelper);
+
+    // Boundary violation lines (will be created/updated in updateBoundsStatus)
+    this.boundaryLines = {
+      x: null,
+      y: null,
+      z: null
+    };
+
+    // Pulse animation state for violation lines
+    this.pulseTime = 0;
   }
 
   createFrustumHelper() {
@@ -227,6 +241,89 @@ export class Camera {
 
     // Update frustum helper
     this.frustumHelper.update();
+
+    // Update bounds status (LEDs and violation lines)
+    this.updateBoundsStatus();
+  }
+
+  updateBoundsStatus() {
+    const { width_m, height_m, length_m } = this.hallway;
+
+    // Check each axis
+    const xInBounds = this.pos.x >= -width_m / 2 && this.pos.x <= width_m / 2;
+    const yInBounds = this.pos.y >= 0 && this.pos.y <= height_m;
+    const zInBounds = this.pos.z >= -length_m / 2 && this.pos.z <= length_m / 2;
+
+    // Update boundary violation lines (dashed lines)
+    this.updateBoundaryLine('x', !xInBounds, 0xff0000);
+    this.updateBoundaryLine('y', !yInBounds, 0x00ff00);
+    this.updateBoundaryLine('z', !zInBounds, 0x0000ff);
+  }
+
+  updateBoundaryLine(axis, isViolated, color) {
+    // Remove existing line if it exists
+    if (this.boundaryLines[axis]) {
+      this.scene.remove(this.boundaryLines[axis]);
+      this.boundaryLines[axis].geometry.dispose();
+      this.boundaryLines[axis].material.dispose();
+      this.boundaryLines[axis] = null;
+    }
+
+    // Create new line if violated
+    if (isViolated) {
+      const { width_m, height_m, length_m } = this.hallway;
+      const cameraPos = this.group.position.clone();
+      let boundaryPos = new THREE.Vector3();
+
+      // Calculate boundary point based on axis
+      if (axis === 'x') {
+        // Find which X boundary is violated
+        const boundaryX = this.pos.x < -width_m / 2 ? -width_m / 2 : width_m / 2;
+        boundaryPos.set(boundaryX, cameraPos.y, cameraPos.z);
+      } else if (axis === 'y') {
+        // Find which Y boundary is violated
+        const boundaryY = this.pos.y < 0 ? 0 : height_m;
+        boundaryPos.set(cameraPos.x, boundaryY, cameraPos.z);
+      } else if (axis === 'z') {
+        // Find which Z boundary is violated
+        const boundaryZ = this.pos.z < -length_m / 2 ? -length_m / 2 : length_m / 2;
+        boundaryPos.set(cameraPos.x, cameraPos.y, boundaryZ);
+      }
+
+      // Create thick dashed line using Line2
+      const positions = [
+        cameraPos.x, cameraPos.y, cameraPos.z,
+        boundaryPos.x, boundaryPos.y, boundaryPos.z
+      ];
+
+      const lineGeometry = new LineGeometry();
+      lineGeometry.setPositions(positions);
+
+      const lineMaterial = new LineMaterial({
+        color: color,
+        linewidth: 4, // In pixels
+        dashed: true,
+        dashScale: 2,
+        dashSize: 0.2,
+        gapSize: 0.1,
+        opacity: 0.8,
+        transparent: true,
+        resolution: new THREE.Vector2(
+          this.renderer.domElement.width,
+          this.renderer.domElement.height
+        )
+      });
+
+      // Make the material store a reference to its color for pulsing
+      lineMaterial.userData.baseColor = new THREE.Color(color);
+      lineMaterial.userData.baseOpacity = 0.8;
+
+      const line = new Line2(lineGeometry, lineMaterial);
+      line.computeLineDistances();
+      line.layers.set(1); // Hide from camera previews
+      this.scene.add(line);
+      this.boundaryLines[axis] = line;
+    }
   }
 
   // Get the Three.js camera for preview rendering
@@ -260,6 +357,30 @@ export class Camera {
     }
   }
 
+  update(deltaTime) {
+    // Update flash animation for boundary violation lines
+    this.pulseTime += deltaTime * 5; // Flash speed (faster)
+
+    ['x', 'y', 'z'].forEach(axis => {
+      const line = this.boundaryLines[axis];
+      if (line && line.material) {
+        const mat = line.material;
+        const baseColor = mat.userData.baseColor;
+        const baseOpacity = mat.userData.baseOpacity;
+
+        // Flashing effect using sine wave (0 to 1 range)
+        const flash = 0.5 + Math.sin(this.pulseTime) * 0.5;
+
+        // Very intense brightness variation (0.5x to 3x brightness)
+        const brightenFactor = 0.5 + flash * 2.5;
+        mat.color.copy(baseColor).multiplyScalar(brightenFactor);
+
+        // Flash opacity intensely (0.3 to 1.0)
+        mat.opacity = baseOpacity * (0.3 + flash * 0.7);
+      }
+    });
+  }
+
   remove() {
     this.scene.remove(this.group);
     this.body.geometry.dispose();
@@ -270,18 +391,28 @@ export class Camera {
       this.frustumMesh.geometry.dispose();
       this.frustumMesh.material.dispose();
     }
+
+    // Remove boundary violation lines
+    ['x', 'y', 'z'].forEach(axis => {
+      if (this.boundaryLines[axis]) {
+        this.scene.remove(this.boundaryLines[axis]);
+        this.boundaryLines[axis].geometry.dispose();
+        this.boundaryLines[axis].material.dispose();
+      }
+    });
   }
 }
 
 export class CameraManager {
-  constructor(scene, hallway) {
+  constructor(scene, hallway, renderer) {
     this.scene = scene;
     this.hallway = hallway;
+    this.renderer = renderer;
     this.cameras = [];
   }
 
   addCamera(opts) {
-    const camera = new Camera(this.scene, this.hallway, opts);
+    const camera = new Camera(this.scene, this.hallway, this.renderer, opts);
     this.cameras.push(camera);
     return camera;
   }
