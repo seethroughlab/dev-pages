@@ -135,7 +135,7 @@ export class Person {
 
     // Text
     ctx.fillStyle = 'white';
-    ctx.font = 'Bold 48px Arial'; // Scale font up for higher res canvas
+    ctx.font = 'Bold 48px monospace'; // Monospace font for technical aesthetic
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

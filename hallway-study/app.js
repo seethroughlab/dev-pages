@@ -6,6 +6,7 @@ import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
 import { PeopleManager } from './people.js';
 import { CameraManager } from './camera.js';
 import { setShowRays, updateRaycastVisualization } from './visibility.js';
+import { createFloorTexture, updateFloorTexture } from './floor-texture.js';
 
 // ===== Hallway dimensions (in meters) =====
 const hallway = {
@@ -181,13 +182,20 @@ function buildHallway() {
 
   const hallGroup = new THREE.Group();
 
-  // Floor
+  // Floor with interactive texture
   const floorGeo = new THREE.PlaneGeometry(W, L, 1, 1);
   floorGeo.rotateX(-Math.PI / 2);
+
+  // Create interactive floor texture
+  const floorTexture = createFloorTexture(hallway);
+
   const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x0f151c,
+    map: floorTexture,
     roughness: 0.9,
-    metalness: 0.0
+    metalness: 0.0,
+    emissive: 0x000000,
+    emissiveMap: floorTexture,
+    emissiveIntensity: 0.3 // Add slight glow
   });
   const floor = new THREE.Mesh(floorGeo, floorMat);
   floor.position.y = 0;
@@ -677,13 +685,13 @@ function addCameraToGUI(cam) {
   specsFolder.add(specs, 'Max Range').name('Max Range').disable();
 
   // Position controls (number inputs with drag-to-change, no min/max constraints)
-  camFolder.add(cam.pos, 'x').name('X (m)').step(0.01).onChange(() => {
+  camFolder.add(cam.pos, 'x').name('X (m)').step(0.01).decimals(4).onChange(() => {
     cam.build();
   });
-  camFolder.add(cam.pos, 'y').name('Y (m)').step(0.01).onChange(() => {
+  camFolder.add(cam.pos, 'y').name('Y (m)').step(0.01).decimals(4).onChange(() => {
     cam.build();
   });
-  camFolder.add(cam.pos, 'z').name('Z (m)').step(0.01).onChange(() => {
+  camFolder.add(cam.pos, 'z').name('Z (m)').step(0.01).decimals(4).onChange(() => {
     cam.build();
   });
 
@@ -840,6 +848,9 @@ function animate() {
 
   // Update people simulation (pass cameras for visibility detection)
   peopleManager.update(deltaTime, cameraManager.cameras);
+
+  // Update interactive floor texture
+  updateFloorTexture(now / 1000, deltaTime, hallway, peopleManager.people);
 
   // Update raycast visualization
   updateRaycastVisualization(raycastLines);
