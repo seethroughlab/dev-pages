@@ -115,7 +115,7 @@ export class Camera {
       new THREE.Vector3(0, 0, -1),
       new THREE.Vector3(0, 0, -0.03),
       0.2,
-      0xffff00,
+      0xffffff, // White
       0.05,
       0.03
     );

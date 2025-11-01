@@ -95,9 +95,24 @@ if (transformControls._root) {
   }
 }
 
+// Track if transform controls were recently used
+let transformJustUsed = false;
+let transformUseTimeout = null;
+
 // Disable OrbitControls when dragging with TransformControls
 transformControls.addEventListener('dragging-changed', (event) => {
   activeControls.enabled = !event.value;
+
+  if (event.value) {
+    // Started dragging
+    transformJustUsed = true;
+  } else {
+    // Stopped dragging - keep flag set briefly to prevent click from deselecting
+    if (transformUseTimeout) clearTimeout(transformUseTimeout);
+    transformUseTimeout = setTimeout(() => {
+      transformJustUsed = false;
+    }, 100);
+  }
 });
 
 // Update camera position/rotation when transform controls change
@@ -1168,14 +1183,10 @@ renderer.domElement.addEventListener('click', (event) => {
     }
   }
 
-  // Check if clicking on transform controls gizmo (don't deselect if so)
-  // Only check this if we didn't click a camera
-  if (transformControls._gizmo && transformControls.object) {
-    const gizmoIntersects = raycaster.intersectObject(transformControls._gizmo, true);
-    if (gizmoIntersects.length > 0 && gizmoIntersects[0].distance < 100) {
-      // Clicked on transform gizmo and it's reasonably close, don't change selection
-      return;
-    }
+  // Check if transform controls were just used (dragged)
+  // If so, don't deselect - the user was manipulating the camera
+  if (transformJustUsed) {
+    return;
   }
 
   // Clicked on empty space - deselect all cameras

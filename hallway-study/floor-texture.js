@@ -22,7 +22,7 @@ export function createFloorTexture(hallway) {
 
   // Canvas dimensions match hallway proportions
   // width = hallway width in pixels, height = hallway length in pixels
-  const pixelsPerMeter = 100; // Resolution
+  const pixelsPerMeter = 300; // Resolution (increased for better detail when zoomed in)
   floorTextureCanvas.width = Math.floor(hallway.width_m * pixelsPerMeter);
   floorTextureCanvas.height = Math.floor(hallway.length_m * pixelsPerMeter);
 
@@ -83,11 +83,11 @@ export function updateFloorTexture(time, deltaTime, hallway, people) {
   });
 
   // Physics parameters
-  const stiffness = 2.5;
-  const restoring = 2.4;
-  const damping = 0.88;
-  const pushRadius = 100;
-  const pushForce = 5000;
+  const stiffness = 5.0;
+  const restoring = 12.0;
+  const damping = 0.85;
+  const pushRadius = 300; // Scaled with resolution (was 100 at 100px/m, now 300 at 300px/m)
+  const pushForce = 15000; // Increased proportionally for higher resolution
   const dt = Math.min(deltaTime, 0.033);
 
   // Helper to apply force from people
@@ -255,42 +255,6 @@ export function updateFloorTexture(time, deltaTime, hallway, people) {
 
   ctx.globalAlpha = 1.0;
 
-  // ===== GRID CELL HIGHLIGHTING =====
-  // Highlight grid cells with high activity
-  ctx.globalAlpha = 0.15;
-  for (let i = 0; i < numLongLines - 1; i++) {
-    for (let j = 0; j < numShortLines - 1; j++) {
-      const x1 = (i / (numLongLines - 1)) * canvas.width;
-      const x2 = ((i + 1) / (numLongLines - 1)) * canvas.width;
-      const y1 = (j / (numShortLines - 1)) * canvas.height;
-      const y2 = ((j + 1) / (numShortLines - 1)) * canvas.height;
-
-      // Sample activity at cell corners
-      const longLine1 = lineState.longLines[i];
-      const longLine2 = lineState.longLines[i + 1];
-      const idx1 = Math.floor((y1 / canvas.height) * (pointsPerLine - 1));
-      const idx2 = Math.floor((y2 / canvas.height) * (pointsPerLine - 1));
-
-      const avgActivity = (
-        Math.abs(longLine1.velocityX[idx1]) +
-        Math.abs(longLine1.velocityX[idx2]) +
-        Math.abs(longLine2.velocityX[idx1]) +
-        Math.abs(longLine2.velocityX[idx2])
-      ) / 4;
-
-      const activity = Math.min(1, avgActivity * 50);
-
-      if (activity > 0.3) {
-        // Orange accent for active cells
-        const r = Math.floor(255 * activity);
-        const g = Math.floor(140 * activity);
-        ctx.fillStyle = `rgb(${r}, ${g}, 0)`;
-        ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
-      }
-    }
-  }
-  ctx.globalAlpha = 1.0;
-
   // ===== CROSSHAIR MARKERS AT INTERSECTIONS =====
   ctx.strokeStyle = 'rgba(100, 180, 220, 0.6)';
   ctx.lineWidth = 0.3;
@@ -331,7 +295,7 @@ export function updateFloorTexture(time, deltaTime, hallway, people) {
 
   // ===== MEASUREMENT INDICATORS =====
   ctx.fillStyle = 'rgba(100, 180, 220, 0.5)';
-  ctx.font = '10px monospace';
+  ctx.font = 'bold 30px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -339,14 +303,14 @@ export function updateFloorTexture(time, deltaTime, hallway, people) {
   for (let m = 0; m <= width_m; m += 1) {
     const x = (m / width_m) * canvas.width;
     const label = `${m.toFixed(1)}m`;
-    ctx.fillText(label, x, 10);
+    ctx.fillText(label, x, 30);
 
     // Tick mark
     ctx.beginPath();
-    ctx.moveTo(x, 15);
-    ctx.lineTo(x, 20);
+    ctx.moveTo(x, 45);
+    ctx.lineTo(x, 60);
     ctx.strokeStyle = 'rgba(100, 180, 220, 0.5)';
-    ctx.lineWidth = 0.5;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   }
 
@@ -355,14 +319,14 @@ export function updateFloorTexture(time, deltaTime, hallway, people) {
   for (let m = 0; m <= length_m; m += 2) {
     const y = (m / length_m) * canvas.height;
     const label = `${m.toFixed(1)}m`;
-    ctx.fillText(label, 40, y);
+    ctx.fillText(label, 120, y);
 
     // Tick mark
     ctx.beginPath();
-    ctx.moveTo(45, y);
-    ctx.lineTo(50, y);
+    ctx.moveTo(135, y);
+    ctx.lineTo(150, y);
     ctx.strokeStyle = 'rgba(100, 180, 220, 0.5)';
-    ctx.lineWidth = 0.5;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   }
 
