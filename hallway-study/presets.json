@@ -1,0 +1,167 @@
+[
+  {
+    "name": "1. Side Entry Cameras",
+    "cameras": [
+      {
+        "id": 1,
+        "name": "Entry",
+        "pos": {
+          "x": 0,
+          "y": 3.3047482447429783,
+          "z": -9.163353737762685
+        },
+        "yaw": 180,
+        "pitch": -24.715966325219107,
+        "roll": 3.3070293706117775e-15
+      },
+      {
+        "id": 2,
+        "name": "Exit",
+        "pos": {
+          "x": 0,
+          "y": 3.2614113251537287,
+          "z": "length_m / 2 + 2"
+        },
+        "yaw": 0,
+        "pitch": -25.991769000512516,
+        "roll": 0
+      }
+    ],
+    "orbitControls": {
+      "position": {
+        "x": 2.2880308107060596,
+        "y": 9.75166844954058,
+        "z": -14.47785297350175
+      },
+      "target": {
+        "x": -1.7704711505716608,
+        "y": 0.8654541399848035,
+        "z": -7.348817927652636
+      }
+    },
+    "settings": {
+      "peopleCount": 3,
+      "showFrustums": true,
+      "showRaycasts": false,
+      "isPerspective": true
+    }
+  },
+  {
+    "name": "2. Ceiling Overhead",
+    "cameras": [
+      {
+        "id": 3,
+        "name": "Front",
+        "pos": {
+          "x": 0,
+          "y": "height_m",
+          "z": -4.087989990600233
+        },
+        "yaw": 89.99999999999999,
+        "pitch": -90,
+        "roll": 0
+      },
+      {
+        "id": 4,
+        "name": "Middle",
+        "pos": {
+          "x": 0,
+          "y": "height_m",
+          "z": "-length_m / 2 + length_m * 0.5"
+        },
+        "yaw": 90,
+        "pitch": -90,
+        "roll": 0
+      },
+      {
+        "id": 5,
+        "name": "Back",
+        "pos": {
+          "x": 0,
+          "y": "height_m",
+          "z": 4.15649580938548
+        },
+        "yaw": 89.99999999999999,
+        "pitch": -90,
+        "roll": 0
+      }
+    ],
+    "orbitControls": {
+      "position": {
+        "x": 11.347385275094442,
+        "y": 5.176231410725294,
+        "z": -4.097670691309316
+      },
+      "target": {
+        "x": 0.1090392904201926,
+        "y": 1.4476841641006943,
+        "z": -1.6365939821343274
+      }
+    },
+    "settings": {
+      "peopleCount": 3,
+      "showFrustums": true,
+      "showRaycasts": false,
+      "isPerspective": true
+    }
+  },
+  {
+  "name": "3. Corner Mounted",
+  "cameras": [
+    {
+      "id": 6,
+      "name": "Corner Front",
+      "pos": {
+        "x": "-width_m / 2",
+        "y": "height_m",
+        "z": "-length_m / 2 + length_m * 0.25"
+      },
+      "yaw": -90,
+      "pitch": -68.90786281835152,
+      "roll": -8.838095758521178e-15
+    },
+    {
+      "id": 7,
+      "name": "Corner Middle",
+      "pos": {
+        "x": 0.8885404745896178,
+        "y": "height_m",
+        "z": "-length_m / 2 + length_m * 0.5"
+      },
+      "yaw": 89.99999999999997,
+      "pitch": -73.73173886017013,
+      "roll": 2.270730085636543e-14
+    },
+    {
+      "id": 8,
+      "name": "Corner Back",
+      "pos": {
+        "x": "-width_m / 2",
+        "y": "height_m",
+        "z": 4.350501968250869
+      },
+      "yaw": -90,
+      "pitch": -69.50785761932235,
+      "roll": -1.8170500913638027e-14
+    }
+  ],
+  "orbitControls": {
+    "position": {
+      "x": 5.834663348276907,
+      "y": 11.689321562278568,
+      "z": 3.6008670952589523
+    },
+    "target": {
+      "x": 0,
+      "y": "height_m / 2",
+      "z": 0
+    }
+  },
+  "settings": {
+    "peopleCount": 3,
+    "showFrustums": true,
+    "showRaycasts": false,
+    "isPerspective": true
+  }
+}
+]

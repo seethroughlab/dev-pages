@@ -625,20 +625,203 @@ function deserializeDocument(data) {
   return true;
 }
 
+// Preset documents loaded from JSON file
+let presetDocuments = [];
+
+// Load and process presets from JSON file
+async function loadPresetDocuments() {
+  try {
+    const response = await fetch('./presets.json');
+    const presetsRaw = await response.json();
+
+    const { width_m, height_m, length_m } = hallway;
+
+    // Helper function to evaluate string expressions
+    function evalExpression(expr) {
+      if (typeof expr === 'number') return expr;
+      if (typeof expr === 'string') {
+        // Create a safe evaluation context with hallway dimensions
+        try {
+          return eval(expr);
+        } catch (e) {
+          console.error(`Failed to evaluate expression: ${expr}`, e);
+          return 0;
+        }
+      }
+      return expr;
+    }
+
+    // Process each preset to evaluate expressions
+    presetDocuments = presetsRaw.map(preset => ({
+      name: preset.name,
+      cameras: preset.cameras.map(cam => ({
+        id: cam.id,
+        name: cam.name,
+        pos: {
+          x: evalExpression(cam.pos.x),
+          y: evalExpression(cam.pos.y),
+          z: evalExpression(cam.pos.z)
+        },
+        yaw: cam.yaw,
+        pitch: cam.pitch,
+        roll: cam.roll
+      })),
+      orbitControls: {
+        position: {
+          x: evalExpression(preset.orbitControls.position.x),
+          y: evalExpression(preset.orbitControls.position.y),
+          z: evalExpression(preset.orbitControls.position.z)
+        },
+        target: {
+          x: evalExpression(preset.orbitControls.target.x),
+          y: evalExpression(preset.orbitControls.target.y),
+          z: evalExpression(preset.orbitControls.target.z)
+        }
+      },
+      settings: preset.settings
+    }));
+
+    console.log('Loaded preset documents:', presetDocuments.length);
+  } catch (e) {
+    console.error('Failed to load preset documents:', e);
+    presetDocuments = [];
+  }
+}
+
+function getPresetDocuments() {
+  return presetDocuments;
+}
+
+function getPresetDocument(name) {
+  const presets = getPresetDocuments();
+  const preset = presets.find(p => p.name === name);
+  if (preset) {
+    return {
+      version: 1,
+      name: preset.name,
+      timestamp: Date.now(),
+      cameras: preset.cameras,
+      orbitControls: preset.orbitControls,
+      settings: preset.settings
+    };
+  }
+  return null;
+}
+
+function isPresetDocument(name) {
+  const presets = getPresetDocuments();
+  return presets.some(p => p.name === name);
+}
+
+function exportCurrentAsPresetJSON() {
+  const { width_m, height_m, length_m } = hallway;
+
+  // Helper to convert number back to expression string
+  function toExpression(value, context) {
+    // Check for common patterns and convert back to expressions
+    if (context === 'height_m' && Math.abs(value - height_m) < 0.001) {
+      return 'height_m';
+    }
+    if (context === 'height_m/2' && Math.abs(value - height_m / 2) < 0.001) {
+      return 'height_m / 2';
+    }
+
+    // Check for Z expressions
+    if (context === 'z') {
+      const halfLength = length_m / 2;
+      if (Math.abs(value - (-halfLength - 2)) < 0.001) return '-length_m / 2 - 2';
+      if (Math.abs(value - (halfLength + 2)) < 0.001) return 'length_m / 2 + 2';
+      if (Math.abs(value - (-halfLength + length_m * 0.25)) < 0.001) return '-length_m / 2 + length_m * 0.25';
+      if (Math.abs(value - (-halfLength + length_m * 0.5)) < 0.001) return '-length_m / 2 + length_m * 0.5';
+      if (Math.abs(value - (-halfLength + length_m * 0.75)) < 0.001) return '-length_m / 2 + length_m * 0.75';
+    }
+
+    // Check for X expressions
+    if (context === 'x') {
+      if (Math.abs(value - (-width_m / 2)) < 0.001) return '-width_m / 2';
+      if (Math.abs(value - (width_m / 2)) < 0.001) return 'width_m / 2';
+    }
+
+    // Default: return as number
+    return value;
+  }
+
+  const preset = {
+    name: documentName,
+    cameras: cameraManager.cameras.map(cam => ({
+      id: cam.id,
+      name: cam.name,
+      pos: {
+        x: toExpression(cam.pos.x, 'x'),
+        y: toExpression(cam.pos.y, 'height_m'),
+        z: toExpression(cam.pos.z, 'z')
+      },
+      yaw: cam.yaw,
+      pitch: cam.pitch,
+      roll: cam.roll
+    })),
+    orbitControls: {
+      position: {
+        x: camera.position.x,
+        y: camera.position.y,
+        z: camera.position.z
+      },
+      target: {
+        x: activeControls.target.x,
+        y: toExpression(activeControls.target.y, 'height_m/2'),
+        z: activeControls.target.z
+      }
+    },
+    settings: {
+      peopleCount: peopleSettings.count,
+      showFrustums: transformSettings.showFrustums,
+      showRaycasts: transformSettings.showRaycasts,
+      isPerspective: isPerspective
+    }
+  };
+
+  const json = JSON.stringify(preset, null, 2);
+
+  // Copy to clipboard
+  navigator.clipboard.writeText(json).then(() => {
+    console.log('Preset JSON copied to clipboard!');
+    console.log(json);
+    alert('Preset JSON copied to clipboard!\n\nPaste this into presets.json to update the preset.\n\nThe JSON has also been logged to the console.');
+  }).catch(err => {
+    console.error('Failed to copy to clipboard:', err);
+    console.log('Preset JSON:');
+    console.log(json);
+    alert('Could not copy to clipboard. Check the console for the JSON.');
+  });
+}
+
 function getAllDocumentNames() {
   const names = [];
+
+  // Add preset documents first
+  const presets = getPresetDocuments();
+  presets.forEach(preset => names.push(preset.name));
+
+  // Add saved documents from localStorage
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key.startsWith('hallway-study-doc:')) {
       names.push(key.replace('hallway-study-doc:', ''));
     }
   }
+
   return names.sort();
 }
 
 function saveDocument() {
   if (documentName === 'Untitled' || !documentName) {
     return saveDocumentAs();
+  }
+
+  // Skip saving over a preset (silently)
+  const presetData = getPresetDocument(documentName);
+  if (presetData) {
+    return false;
   }
 
   const data = serializeDocument();
@@ -667,7 +850,14 @@ function saveDocumentAs() {
 
   const trimmedName = newName.trim();
 
-  // Check if document already exists
+  // Check if trying to overwrite a preset
+  const presetData = getPresetDocument(trimmedName);
+  if (presetData) {
+    alert(`"${trimmedName}" is a preset document and cannot be overwritten. Please choose a different name.`);
+    return false;
+  }
+
+  // Check if document already exists in localStorage
   const existingNames = getAllDocumentNames();
   if (existingNames.includes(trimmedName) && trimmedName !== documentName) {
     const overwrite = confirm(`Document "${trimmedName}" already exists. Overwrite?`);
@@ -725,9 +915,9 @@ function updateDocumentTitle() {
   gui.title(`${dirtyMarker}${documentName} - Hallway Study`);
 }
 
-// Warn before closing with unsaved changes
+// Warn before closing with unsaved changes (unless it's a preset)
 window.addEventListener('beforeunload', (e) => {
-  if (documentDirty) {
+  if (documentDirty && !getPresetDocument(documentName)) {
     e.preventDefault();
     // Modern browsers will show a generic "unsaved changes" dialog
   }
@@ -735,7 +925,7 @@ window.addEventListener('beforeunload', (e) => {
 
 // Auto-save every 30 seconds
 setInterval(() => {
-  if (documentDirty && documentName !== 'Untitled') {
+  if (documentDirty && documentName !== 'Untitled' && !getPresetDocument(documentName)) {
     saveDocument();
     console.log('Auto-saved');
   }
@@ -791,16 +981,25 @@ function refreshDocumentDropdown() {
       }
 
       try {
-        const saved = localStorage.getItem(`hallway-study-doc:${selectedDoc}`);
-        if (!saved) {
-          alert(`Document "${selectedDoc}" not found.`);
-          // Reset dropdown to current document
-          documentDropdownSettings.currentDocument = documentName;
-          documentDropdownController.updateDisplay();
-          return;
+        let data = null;
+
+        // Check if it's a preset document first
+        const presetData = getPresetDocument(selectedDoc);
+        if (presetData) {
+          data = presetData;
+        } else {
+          // Try to load from localStorage
+          const saved = localStorage.getItem(`hallway-study-doc:${selectedDoc}`);
+          if (!saved) {
+            alert(`Document "${selectedDoc}" not found.`);
+            // Reset dropdown to current document
+            documentDropdownSettings.currentDocument = documentName;
+            documentDropdownController.updateDisplay();
+            return;
+          }
+          data = JSON.parse(saved);
         }
 
-        const data = JSON.parse(saved);
         deserializeDocument(data);
         refreshDocumentDropdown(); // Refresh to update current selection
       } catch (e) {
@@ -813,12 +1012,30 @@ function refreshDocumentDropdown() {
     });
 }
 
-refreshDocumentDropdown();
+// Initialize presets and dropdown
+(async function initializeDocuments() {
+  await loadPresetDocuments();
+
+  // Load the first preset by default
+  const presets = getPresetDocuments();
+  if (presets.length > 0) {
+    const firstPreset = getPresetDocument(presets[0].name);
+    if (firstPreset) {
+      deserializeDocument(firstPreset);
+    }
+  }
+
+  refreshDocumentDropdown();
+})();
 
 fileFolder.add({ newDoc: newDocument }, 'newDoc').name('New Document');
 fileFolder.add({ save: saveDocument }, 'save').name('Save (Ctrl+S)');
 fileFolder.add({ saveAs: saveDocumentAs }, 'saveAs').name('Save As...');
-fileFolder.add({
+
+// Import/Export subfolder
+const importExportFolder = fileFolder.addFolder('Import/Export');
+importExportFolder.add({ exportPreset: exportCurrentAsPresetJSON }, 'exportPreset').name('📋 Copy as Preset JSON');
+importExportFolder.add({
   export: () => {
     const data = serializeDocument();
     const json = JSON.stringify(data, null, 2);
@@ -831,7 +1048,7 @@ fileFolder.add({
     URL.revokeObjectURL(url);
   }
 }, 'export').name('Export JSON');
-fileFolder.add({
+importExportFolder.add({
   import: () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -856,6 +1073,7 @@ fileFolder.add({
     input.click();
   }
 }, 'import').name('Import JSON');
+importExportFolder.close(); // Collapsed by default
 
 // People Simulation Panel
 const peopleFolder = gui.addFolder('People Simulation');
