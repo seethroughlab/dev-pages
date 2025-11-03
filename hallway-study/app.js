@@ -954,9 +954,11 @@ function refreshDocumentDropdown() {
     choices['Untitled'] = 'Untitled';
   }
 
-  // Add all saved documents
+  // Add all saved documents (with lock emoji for presets)
   savedDocs.forEach(name => {
-    choices[name] = name;
+    const isPreset = getPresetDocument(name) !== null;
+    const displayName = isPreset ? `🔒 ${name}` : name;
+    choices[displayName] = name;
   });
 
   // Remove old controller if it exists
@@ -964,8 +966,10 @@ function refreshDocumentDropdown() {
     documentDropdownController.destroy();
   }
 
-  // Update the setting value
-  documentDropdownSettings.currentDocument = documentName;
+  // Update the setting value (find the display name for current document)
+  const currentIsPreset = getPresetDocument(documentName) !== null;
+  const currentDisplayName = currentIsPreset ? `🔒 ${documentName}` : documentName;
+  documentDropdownSettings.currentDocument = currentDisplayName;
 
   // Create new controller with updated choices
   documentDropdownController = fileFolder.add(documentDropdownSettings, 'currentDocument', choices)
@@ -992,8 +996,9 @@ function refreshDocumentDropdown() {
           const saved = localStorage.getItem(`hallway-study-doc:${selectedDoc}`);
           if (!saved) {
             alert(`Document "${selectedDoc}" not found.`);
-            // Reset dropdown to current document
-            documentDropdownSettings.currentDocument = documentName;
+            // Reset dropdown to current document (with emoji if preset)
+            const currentIsPreset = getPresetDocument(documentName) !== null;
+            documentDropdownSettings.currentDocument = currentIsPreset ? `🔒 ${documentName}` : documentName;
             documentDropdownController.updateDisplay();
             return;
           }
@@ -1005,8 +1010,9 @@ function refreshDocumentDropdown() {
       } catch (e) {
         console.error('Failed to load document:', e);
         alert('Failed to load document. The saved data might be corrupted.');
-        // Reset dropdown to current document
-        documentDropdownSettings.currentDocument = documentName;
+        // Reset dropdown to current document (with emoji if preset)
+        const currentIsPreset = getPresetDocument(documentName) !== null;
+        documentDropdownSettings.currentDocument = currentIsPreset ? `🔒 ${documentName}` : documentName;
         documentDropdownController.updateDisplay();
       }
     });
