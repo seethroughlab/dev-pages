@@ -4,17 +4,42 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 
-// OAK-D Pro PoE Stereo Depth Camera Specs (OV9282)
+// OAK-D Pro PoE Camera Specs
 const CAMERA_SPECS = {
-  hFovDeg: 80,      // Horizontal field of view
-  vFovDeg: 55,      // Vertical field of view
-  aspectRatio: 16/10,
-  minRange_m: 0.7,  // Ideal depth range starts at 70cm
-  maxRange_m: 12,   // Ideal depth range ends at 12m
-  baseline_m: 0.075 // Stereo baseline: 7.5cm
+  'OAK-D Pro PoE': {
+    hFovDeg: 80,      // Horizontal field of view
+    vFovDeg: 55,      // Vertical field of view
+    aspectRatio: 16/10,
+    minRange_m: 0.7,  // Ideal depth range starts at 70cm
+    maxRange_m: 12,   // Ideal depth range ends at 12m
+    baseline_m: 0.075 // Stereo baseline: 7.5cm
+  },
+  'OAK-D Pro W PoE': {
+    hFovDeg: 127,     // Horizontal field of view (wide angle)
+    vFovDeg: 79.5,    // Vertical field of view (wide angle)
+    aspectRatio: 16/10,
+    minRange_m: 0.7,  // Ideal depth range starts at 70cm
+    maxRange_m: 12,   // Ideal depth range ends at 12m
+    baseline_m: 0.075 // Stereo baseline: 7.5cm
+  }
 };
 
 let nextCameraId = 1;
+
+// Global camera model (all cameras use the same model)
+let globalCameraModel = 'OAK-D Pro PoE';
+
+export function setGlobalCameraModel(model) {
+  if (!CAMERA_SPECS[model]) {
+    console.error(`Unknown camera model: ${model}`);
+    return;
+  }
+  globalCameraModel = model;
+}
+
+export function getGlobalCameraModel() {
+  return globalCameraModel;
+}
 
 export class Camera {
   constructor(scene, hallway, renderer, opts = {}) {
@@ -40,11 +65,8 @@ export class Camera {
     this.pitch = pitchDeg;
     this.roll = rollDeg;
 
-    // Camera specs (locked to OAK-D Pro PoE)
-    this.hFovDeg = CAMERA_SPECS.hFovDeg;
-    this.vFovDeg = CAMERA_SPECS.vFovDeg;
-    this.minRange_m = CAMERA_SPECS.minRange_m;
-    this.maxRange_m = CAMERA_SPECS.maxRange_m;
+    // Camera specs (based on global model)
+    this.updateSpecs();
 
     // Create 3D representation
     this.group = new THREE.Group();
@@ -62,6 +84,39 @@ export class Camera {
     this.build();
 
     scene.add(this.group);
+  }
+
+  updateSpecs() {
+    const specs = CAMERA_SPECS[globalCameraModel];
+    this.hFovDeg = specs.hFovDeg;
+    this.vFovDeg = specs.vFovDeg;
+    this.minRange_m = specs.minRange_m;
+    this.maxRange_m = specs.maxRange_m;
+    this.aspectRatio = specs.aspectRatio;
+    this.baseline_m = specs.baseline_m;
+  }
+
+  refreshForModelChange() {
+    // Update specs based on new global model
+    this.updateSpecs();
+
+    // Recreate frustum with new specs
+    if (this.frustumHelper) {
+      this.group.remove(this.frustumHelper);
+      this.frustumHelper = null;
+    }
+    if (this.frustumMesh) {
+      this.group.remove(this.frustumMesh);
+      this.frustumMesh.geometry.dispose();
+      this.frustumMesh.material.dispose();
+      this.frustumMesh = null;
+    }
+    if (this.frustumCamera) {
+      this.frustumCamera = null;
+    }
+
+    this.createFrustumHelper();
+    this.build();
   }
 
   createCameraGeometry() {
@@ -102,12 +157,12 @@ export class Camera {
 
     const leftLens = new THREE.Mesh(lensGeometry, lensMaterial);
     leftLens.rotation.x = Math.PI / 2;
-    leftLens.position.set(-CAMERA_SPECS.baseline_m / 2, 0, -0.025);
+    leftLens.position.set(-this.baseline_m / 2, 0, -0.025);
     this.group.add(leftLens);
 
     const rightLens = new THREE.Mesh(lensGeometry, lensMaterial);
     rightLens.rotation.x = Math.PI / 2;
-    rightLens.position.set(CAMERA_SPECS.baseline_m / 2, 0, -0.025);
+    rightLens.position.set(this.baseline_m / 2, 0, -0.025);
     this.group.add(rightLens);
 
     // Direction indicator (small arrow pointing forward)
@@ -134,7 +189,7 @@ export class Camera {
 
   createFrustumHelper() {
     // Create frustum visualization
-    const aspect = CAMERA_SPECS.aspectRatio;
+    const aspect = this.aspectRatio;
     const near = this.minRange_m;
     const far = this.maxRange_m;
 
@@ -330,7 +385,7 @@ export class Camera {
   getPreviewCamera() {
     const camera = new THREE.PerspectiveCamera(
       this.vFovDeg,
-      CAMERA_SPECS.aspectRatio,
+      this.aspectRatio,
       this.minRange_m,
       this.maxRange_m
     );

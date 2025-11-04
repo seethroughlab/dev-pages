@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
 import { PeopleManager } from './people.js';
-import { CameraManager } from './camera.js';
+import { CameraManager, setGlobalCameraModel, getGlobalCameraModel } from './camera.js';
 import { setShowRays, updateRaycastVisualization } from './visibility.js';
 import { createFloorTexture, updateFloorTexture } from './floor-texture.js';
 
@@ -546,7 +546,8 @@ function serializeDocument() {
       peopleCount: peopleSettings.count,
       showFrustums: transformSettings.showFrustums,
       showRaycasts: transformSettings.showRaycasts,
-      isPerspective: isPerspective
+      isPerspective: isPerspective,
+      cameraModel: getGlobalCameraModel()
     }
   };
 }
@@ -569,6 +570,12 @@ function deserializeDocument(data) {
 
   // Deselect any active camera
   deselectAllCameras();
+
+  // Restore global camera model first
+  if (data.settings.cameraModel) {
+    setGlobalCameraModel(data.settings.cameraModel);
+    cameraModelSettings.model = data.settings.cameraModel;
+  }
 
   // Restore cameras
   data.cameras.forEach(camData => {
@@ -621,6 +628,9 @@ function deserializeDocument(data) {
   documentName = data.name || 'Untitled';
   documentDirty = false;
   updateDocumentTitle();
+
+  // Refresh all GUI controllers to show updated values
+  gui.controllersRecursive().forEach(c => c.updateDisplay());
 
   return true;
 }
@@ -776,7 +786,8 @@ function exportCurrentAsPresetJSON() {
       peopleCount: peopleSettings.count,
       showFrustums: transformSettings.showFrustums,
       showRaycasts: transformSettings.showRaycasts,
-      isPerspective: isPerspective
+      isPerspective: isPerspective,
+      cameraModel: getGlobalCameraModel()
     }
   };
 
@@ -1097,6 +1108,26 @@ peopleFolder.open();
 // Cameras Panel
 const camerasFolder = gui.addFolder('Cameras');
 
+// Global Camera Model Selection
+const cameraModelSettings = {
+  model: 'OAK-D Pro PoE'
+};
+
+camerasFolder.add(cameraModelSettings, 'model', ['OAK-D Pro PoE', 'OAK-D Pro W PoE'])
+  .name('Camera Model')
+  .onChange((value) => {
+    setGlobalCameraModel(value);
+    // Update all existing cameras
+    cameraManager.cameras.forEach(cam => {
+      cam.refreshForModelChange();
+      // Update specs display if camera has GUI
+      if (cam.specsData && cam.specsControllers) {
+        updateCameraSpecsDisplay(cam);
+      }
+    });
+    markDocumentDirty();
+  });
+
 // Transform mode toolbar (in top-left corner)
 const transformToolbar = document.querySelector('.transform-toolbar');
 const translateBtn = document.getElementById('translate-mode');
@@ -1257,6 +1288,25 @@ camerasFolder.add({
   }
 }, 'addCamera').name('Add Camera');
 
+// Function to update camera specs display when model changes
+function updateCameraSpecsDisplay(cam) {
+  // Update the spec values
+  if (cam.specsData) {
+    cam.specsData['H-FOV'] = `${cam.hFovDeg}°`;
+    cam.specsData['V-FOV'] = `${cam.vFovDeg}°`;
+    cam.specsData['Min Range'] = `${cam.minRange_m}m`;
+    cam.specsData['Max Range'] = `${cam.maxRange_m}m`;
+  }
+
+  // Refresh the controllers to show new values
+  if (cam.specsControllers) {
+    cam.specsControllers.hFov.updateDisplay();
+    cam.specsControllers.vFov.updateDisplay();
+    cam.specsControllers.minRange.updateDisplay();
+    cam.specsControllers.maxRange.updateDisplay();
+  }
+}
+
 // Function to add camera controls to GUI
 function addCameraToGUI(cam) {
   const camFolder = gui.addFolder(cam.name);
@@ -1264,8 +1314,8 @@ function addCameraToGUI(cam) {
   // Store folder reference on camera
   cam.guiFolder = camFolder;
 
-  // OAK-D Pro PoE Specs (read-only information)
-  const specsFolder = camFolder.addFolder('OAK-D Pro PoE Specs');
+  // Camera Specs (read-only information)
+  const specsFolder = camFolder.addFolder('Camera Specs');
   const specs = {
     'H-FOV': `${cam.hFovDeg}°`,
     'V-FOV': `${cam.vFovDeg}°`,
@@ -1273,10 +1323,19 @@ function addCameraToGUI(cam) {
     'Max Range': `${cam.maxRange_m}m`
   };
 
-  specsFolder.add(specs, 'H-FOV').name('Horizontal FOV').disable();
-  specsFolder.add(specs, 'V-FOV').name('Vertical FOV').disable();
-  specsFolder.add(specs, 'Min Range').name('Min Range').disable();
-  specsFolder.add(specs, 'Max Range').name('Max Range').disable();
+  const hFovController = specsFolder.add(specs, 'H-FOV').name('Horizontal FOV').disable();
+  const vFovController = specsFolder.add(specs, 'V-FOV').name('Vertical FOV').disable();
+  const minRangeController = specsFolder.add(specs, 'Min Range').name('Min Range').disable();
+  const maxRangeController = specsFolder.add(specs, 'Max Range').name('Max Range').disable();
+
+  // Store controllers for updating
+  cam.specsControllers = {
+    hFov: hFovController,
+    vFov: vFovController,
+    minRange: minRangeController,
+    maxRange: maxRangeController
+  };
+  cam.specsData = specs;
 
   // Position controls (number inputs with drag-to-change, no min/max constraints)
   camFolder.add(cam.pos, 'x').name('X (m)').step(0.01).decimals(4).onChange(() => {
