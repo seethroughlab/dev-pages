@@ -182,19 +182,29 @@ export class ClockManager {
    * Set BPM and recalculate timing
    */
   setBPM(bpm) {
+    const oldMsPerSixteenth = this.msPerSixteenth;
+
     this.bpm = bpm;
     this.msPerBeat = 60000 / this.bpm;
     this.msPerSixteenth = this.msPerBeat / 4;
     this.msPerClockTick = this.msPerBeat / 24;
 
-    // If running, adjust timing to maintain continuity
-    // DON'T restart the timer - just adjust the start time so tick count remains valid
+    // If running, adjust timing to maintain continuity of position
     if (this.running) {
-      // Recalculate start time based on current tick count and new tempo
-      // Use audio context time (in seconds)
+      // Adjust the main clock start time to maintain current sixteenth position
+      // Current position should remain the same, but future sixteenths will arrive at the new tempo
+      const currentAudioTime = this.audioContext.currentTime;
+
+      // Recalculate start time so that current sixteenth count is preserved
+      // startTime = currentAudioTime - (currentTime at new tempo)
+      // currentTime at new tempo = sixteenthCount * new msPerSixteenth
+      this.startTime = currentAudioTime - ((this.sixteenthCount * this.msPerSixteenth) / 1000);
+
+      // Also adjust MIDI clock tick timing
       const secPerClockTick = this.msPerClockTick / 1000;
-      this.clockTickStartTime = this.audioContext.currentTime - (this.clockTickCount * secPerClockTick);
-      console.log(`[Clock] Timing adjusted for new BPM: ${this.msPerClockTick.toFixed(2)}ms per tick`);
+      this.clockTickStartTime = currentAudioTime - (this.clockTickCount * secPerClockTick);
+
+      console.log(`[Clock] Timing adjusted for new BPM: ${oldMsPerSixteenth.toFixed(2)}ms → ${this.msPerSixteenth.toFixed(2)}ms per 16th`);
     }
 
     console.log(`[Clock] BPM set to ${this.bpm} (16th note: ${this.msPerSixteenth.toFixed(2)}ms)`);

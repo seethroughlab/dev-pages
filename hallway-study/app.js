@@ -1449,11 +1449,10 @@ keyFolder.open();
 // Chord Progression Panel
 const chordFolder = gui.addFolder('Chord Progression');
 const chordSettings = {
-  currentChord: 'I',
+  progressionDisplay: 'I - V - vi - IV',
   progression: 'I-V-vi-IV',
   autoChange: true,
   changeInterval: 8,
-  position: '1/4',
   manualNext: () => {
     chordManager.manualNextChord();
     triggerZones.updateChordPatterns();
@@ -1461,11 +1460,8 @@ const chordSettings = {
   }
 };
 
-// Current chord display (read-only)
-const chordController = chordFolder.add(chordSettings, 'currentChord').name('Current Chord').disable();
-
-// Chord position in progression (read-only)
-const chordPosController = chordFolder.add(chordSettings, 'position').name('Position').disable();
+// Progression with highlighted current chord (read-only)
+const progressionDisplayController = chordFolder.add(chordSettings, 'progressionDisplay').name('Progression').disable();
 
 // Progression selector
 const progressionNames = chordManager.getProgressionNames();
@@ -1493,10 +1489,10 @@ chordFolder.add(chordSettings, 'manualNext').name('→ Next Chord');
 // Update chord display function
 function updateChordDisplay() {
   const info = chordManager.getInfo();
-  chordSettings.currentChord = info.currentChord;
-  chordSettings.position = info.chordPosition;
-  chordController.updateDisplay();
-  chordPosController.updateDisplay();
+  chordSettings.progressionDisplay = info.progressionDisplay;
+  chordSettings.progression = info.progression;
+  progressionDisplayController.updateDisplay();
+  progressionController.updateDisplay();
 }
 
 // Update display periodically

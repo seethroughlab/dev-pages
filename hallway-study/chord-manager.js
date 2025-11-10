@@ -47,11 +47,73 @@ export class ChordManager {
         { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
         { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
         { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
+      ],
+      'vi-IV-I-V': [
+        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
+        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
+      ],
+      'ii-V-I': [
+        { name: 'ii', root: 1, third: 3, fifth: 5, seventh: 7, ninth: 2, eleventh: 4, thirteenth: 6 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 }
+      ],
+      'I-iii-IV-V': [
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
+        { name: 'iii', root: 2, third: 4, fifth: 6, seventh: 8, ninth: 3, eleventh: 5, thirteenth: 7 },
+        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
+      ],
+      'I-vi-ii-V': [
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
+        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
+        { name: 'ii', root: 1, third: 3, fifth: 5, seventh: 7, ninth: 2, eleventh: 4, thirteenth: 6 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
+      ],
+      'I-iii-vi-IV': [
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
+        { name: 'iii', root: 2, third: 4, fifth: 6, seventh: 8, ninth: 3, eleventh: 5, thirteenth: 7 },
+        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
+        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 }
+      ],
+      'ii-V-I-vi': [
+        { name: 'ii', root: 1, third: 3, fifth: 5, seventh: 7, ninth: 2, eleventh: 4, thirteenth: 6 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
+        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 }
+      ],
+      'vi-V-IV-V': [
+        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
+        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
+      ],
+      'I-IV-I-V': [
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
+        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
+      ],
+      'I-vi-iii-IV': [
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
+        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
+        { name: 'iii', root: 2, third: 4, fifth: 6, seventh: 8, ninth: 3, eleventh: 5, thirteenth: 7 },
+        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 }
+      ],
+      'IV-V-iii-vi': [
+        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
+        { name: 'iii', root: 2, third: 4, fifth: 6, seventh: 8, ninth: 3, eleventh: 5, thirteenth: 7 },
+        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 }
       ]
     };
 
-    this.currentProgressionName = 'I-V-vi-IV';
+    // Start with random progression and random chord within it
+    const progressionNames = Object.keys(this.progressions);
+    this.currentProgressionName = progressionNames[Math.floor(Math.random() * progressionNames.length)];
     this.currentProgression = this.progressions[this.currentProgressionName];
+    this.currentChordIndex = Math.floor(Math.random() * this.currentProgression.length);
 
     // Set up clock callback for automatic chord changes
     if (this.clockManager) {
@@ -86,8 +148,6 @@ export class ChordManager {
     // Create multiple octaves for variety
     const rootOct2 = root + 8;
     const thirdOct2 = third + 8;
-    const fifthOct2 = fifth + 8;
-    const seventhOct2 = seventh + 8;
     const ninthOct2 = ninth + 8;
 
     return {
@@ -192,9 +252,15 @@ export class ChordManager {
       ? (this.barsUntilChange - (this.currentBar % this.barsUntilChange))
       : 'Off';
 
+    // Build progression string with active chord highlighted
+    const progressionWithHighlight = this.currentProgression
+      .map((c, i) => i === this.currentChordIndex ? `[${c.name}]` : c.name)
+      .join(' - ');
+
     return {
       currentChord: chord.name,
       chordPosition: `${this.currentChordIndex + 1}/${this.currentProgression.length}`,
+      progressionDisplay: progressionWithHighlight,
       progression: this.currentProgressionName,
       barsUntilChange: barsRemaining,
       autoChangeEnabled: this.autoChangeEnabled

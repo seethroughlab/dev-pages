@@ -8,7 +8,6 @@
 export class KeyManager {
   constructor(clockManager) {
     this.clockManager = clockManager;
-    this.currentKey = '8A'; // Start with A minor (8A)
     this.autoChangeEnabled = true;
     this.barsUntilChange = 16; // Change key every 16 bars by default
     this.currentBar = 0;
@@ -46,6 +45,10 @@ export class KeyManager {
       major: [0, 2, 4, 5, 7, 9, 11, 12],    // Major scale
       minor: [0, 2, 3, 5, 7, 8, 10, 12]     // Natural minor scale
     };
+
+    // Start with random key from Camelot Wheel
+    const camelotKeys = Object.keys(this.camelotWheel);
+    this.currentKey = camelotKeys[Math.floor(Math.random() * camelotKeys.length)];
 
     // Set up clock callback for automatic key changes
     if (this.clockManager) {
