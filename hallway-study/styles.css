@@ -279,3 +279,75 @@ canvas {
   border: 1px solid #233140;
   border-radius: 2px;
 }
+
+/* Toast Notifications */
+.toast-container {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  background: rgba(10, 14, 20, 0.95);
+  border: 1px solid #314150;
+  border-radius: 8px;
+  padding: 16px 20px;
+  color: #e6edf3;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  animation: slideIn 0.3s ease-out;
+  min-width: 200px;
+  max-width: 300px;
+}
+
+.toast.chord-change {
+  border-left: 4px solid #44ff66;
+}
+
+.toast.key-change {
+  border-left: 4px solid #4466ff;
+}
+
+.toast.bpm-change {
+  border-left: 4px solid #ff6b35;
+}
+
+.toast-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #8899aa;
+  margin-bottom: 4px;
+}
+
+.toast-content {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}

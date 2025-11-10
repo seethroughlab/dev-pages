@@ -7,6 +7,12 @@ import { PeopleManager } from './people.js';
 import { CameraManager, setGlobalCameraModel, getGlobalCameraModel } from './camera.js';
 import { setShowRays, updateRaycastVisualization } from './visibility.js';
 import { createFloorTexture, updateFloorTexture } from './floor-texture.js';
+import { createShaderFloor, updateShaderFloor } from './floor-shader.js';
+import { MIDIManager } from './midi-manager.js';
+import { ClockManager } from './clock-manager.js';
+import { TriggerZone } from './trigger-zones.js';
+import { KeyManager } from './key-manager.js';
+import { ChordManager } from './chord-manager.js';
 
 // ===== Hallway dimensions (in meters) =====
 const hallway = {
@@ -14,6 +20,54 @@ const hallway = {
   width_m: 2.0574,
   height_m: 3.4538
 };
+
+// ===== Cookie Utilities =====
+function setCookie(name, value, days = 365) {
+  const expires = new Date();
+  expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
+}
+
+function getCookie(name) {
+  const nameEQ = name + '=';
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+  }
+  return null;
+}
+
+// ===== Toast Notification System =====
+function showToast(title, content, type = 'info') {
+  const container = document.getElementById('toast-container');
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  const titleEl = document.createElement('div');
+  titleEl.className = 'toast-title';
+  titleEl.textContent = title;
+
+  const contentEl = document.createElement('div');
+  contentEl.className = 'toast-content';
+  contentEl.textContent = content;
+
+  toast.appendChild(titleEl);
+  toast.appendChild(contentEl);
+  container.appendChild(toast);
+
+  // Auto-remove after 3 seconds
+  setTimeout(() => {
+    toast.style.animation = 'fadeOut 0.3s ease-out';
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
+  }, 3000);
+}
 
 // ===== Scene Setup =====
 const scene = new THREE.Scene();
@@ -197,25 +251,26 @@ function buildHallway() {
 
   const hallGroup = new THREE.Group();
 
-  // Floor with interactive texture
-  const floorGeo = new THREE.PlaneGeometry(W, L, 1, 1);
-  floorGeo.rotateX(-Math.PI / 2);
-
-  // Create interactive floor texture
-  const floorTexture = createFloorTexture(hallway);
-
-  const floorMat = new THREE.MeshStandardMaterial({
-    map: floorTexture,
-    roughness: 0.9,
-    metalness: 0.0,
-    emissive: 0x000000,
-    emissiveMap: floorTexture,
-    emissiveIntensity: 0.3 // Add slight glow
-  });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.position.y = 0;
-  floor.receiveShadow = true;
-  hallGroup.add(floor);
+  // OLD Floor with interactive texture - REPLACED by shader floor
+  // Keeping this code commented for reference, but shader floor is now used instead
+  // const floorGeo = new THREE.PlaneGeometry(W, L, 1, 1);
+  // floorGeo.rotateX(-Math.PI / 2);
+  //
+  // // Create interactive floor texture
+  // const floorTexture = createFloorTexture(hallway);
+  //
+  // const floorMat = new THREE.MeshStandardMaterial({
+  //   map: floorTexture,
+  //   roughness: 0.9,
+  //   metalness: 0.0,
+  //   emissive: 0x000000,
+  //   emissiveMap: floorTexture,
+  //   emissiveIntensity: 0.3 // Add slight glow
+  // });
+  // const floor = new THREE.Mesh(floorGeo, floorMat);
+  // floor.position.y = 0;
+  // floor.receiveShadow = true;
+  // hallGroup.add(floor);
 
   // Half dimensions for convenience
   const hw = W / 2;
@@ -339,6 +394,65 @@ peopleManager.setEnabled(true);
 
 // ===== Camera System =====
 const cameraManager = new CameraManager(scene, hallway, renderer);
+
+// ===== MIDI System =====
+const midiManager = new MIDIManager();
+midiManager.init();
+
+// ===== Clock System =====
+const clockManager = new ClockManager(120, midiManager); // 120 BPM, pass midiManager for Clock output
+
+// Note: MIDI Clock callbacks removed - we're SENDING clock to Ableton, not receiving
+
+// Set up clock callbacks for debugging
+clockManager.onSixteenthNote = (count, pos) => {
+  // This fires every 16th note (125ms at 120 BPM)
+  // Events will be triggered from here
+};
+
+clockManager.onBeat = (count, pos) => {
+  // This fires every quarter note beat
+  // console.log(`[Clock] Beat ${count} (${pos.bar}:${pos.beat})`);
+};
+
+// Update trigger notes when auto-key/chord-change happens (after managers initialize)
+// This will be set up after GUI is ready
+let keyManagerOnBar = null;
+let chordManagerOnBar = null;
+
+// Wait for MIDI to connect, then start clock and panic
+setTimeout(() => {
+  if (midiManager.isConnected) {
+    console.log('[MIDI] Connection established');
+    console.log('[MIDI] Auto-panic on startup...');
+    midiManager.panic();
+
+    // Start clock after MIDI is ready
+    console.log('[Clock] Starting with MIDI Clock output enabled');
+    clockManager.start();
+  } else {
+    console.warn('[MIDI] Not connected - starting clock without MIDI sync');
+    clockManager.start();
+  }
+}, 500); // Wait 500ms for MIDI connection to establish
+
+// ===== Chord System =====
+const chordManager = new ChordManager(clockManager);
+// Store chord manager's onBar callback before it gets overwritten
+chordManagerOnBar = clockManager.onBar;
+
+// ===== Key System =====
+const keyManager = new KeyManager(clockManager);
+// Store key manager's onBar callback
+keyManagerOnBar = clockManager.onBar;
+
+// ===== Trigger Zone System =====
+const triggerZones = new TriggerZone(hallway, keyManager, chordManager);
+
+// ===== Shader Floor System =====
+const shaderFloor = createShaderFloor(hallway, triggerZones);
+scene.add(shaderFloor);
+console.log('[Floor] Shader-based floor created with 3 zone effects');
 
 // ===== Raycast Visualization =====
 const raycastLines = new THREE.Group();
@@ -544,8 +658,6 @@ function serializeDocument() {
     },
     settings: {
       peopleCount: peopleSettings.count,
-      showFrustums: transformSettings.showFrustums,
-      showRaycasts: transformSettings.showRaycasts,
       isPerspective: isPerspective,
       cameraModel: getGlobalCameraModel()
     }
@@ -587,12 +699,12 @@ function deserializeDocument(data) {
       rollDeg: camData.roll
     });
 
-    // Set frustum visibility
+    // Set frustum visibility from user preference (not from document)
     if (cam.frustumHelper) {
-      cam.frustumHelper.visible = data.settings.showFrustums;
+      cam.frustumHelper.visible = transformSettings.showFrustums;
     }
     if (cam.frustumMesh) {
-      cam.frustumMesh.visible = data.settings.showFrustums;
+      cam.frustumMesh.visible = transformSettings.showFrustums;
     }
 
     addCameraToGUI(cam);
@@ -616,9 +728,7 @@ function deserializeDocument(data) {
   peopleSettings.count = data.settings.peopleCount;
   peopleManager.setCount(data.settings.peopleCount);
 
-  transformSettings.showFrustums = data.settings.showFrustums;
-  transformSettings.showRaycasts = data.settings.showRaycasts;
-  setShowRays(data.settings.showRaycasts);
+  // Don't restore showFrustums or showRaycasts - they're user preferences saved in cookies, not document state
 
   // Restore camera mode
   if (data.settings.isPerspective !== isPerspective) {
@@ -631,6 +741,8 @@ function deserializeDocument(data) {
 
   // Refresh all GUI controllers to show updated values
   gui.controllersRecursive().forEach(c => c.updateDisplay());
+
+  console.log(`[Document] Loaded "${documentName}" - user prefs from cookies: showFrustums=${transformSettings.showFrustums}, showRaycasts=${transformSettings.showRaycasts}`);
 
   return true;
 }
@@ -784,8 +896,6 @@ function exportCurrentAsPresetJSON() {
     },
     settings: {
       peopleCount: peopleSettings.count,
-      showFrustums: transformSettings.showFrustums,
-      showRaycasts: transformSettings.showRaycasts,
       isPerspective: isPerspective,
       cameraModel: getGlobalCameraModel()
     }
@@ -949,6 +1059,8 @@ setInterval(() => {
 const gui = new GUI({ title: 'Hallway Study' });
 updateDocumentTitle();
 
+// ===== GUI PANELS =====
+
 // File Menu
 const fileFolder = gui.addFolder('File');
 
@@ -1095,7 +1207,8 @@ importExportFolder.close(); // Collapsed by default
 // People Simulation Panel
 const peopleFolder = gui.addFolder('People Simulation');
 const peopleSettings = {
-  count: 3
+  count: 3,
+  lateralMovement: true
 };
 
 peopleFolder.add(peopleSettings, 'count', 0, 12, 1).name('Count').onChange((value) => {
@@ -1103,7 +1216,316 @@ peopleFolder.add(peopleSettings, 'count', 0, 12, 1).name('Count').onChange((valu
   markDocumentDirty();
 });
 
+peopleFolder.add(peopleSettings, 'lateralMovement').name('Sideways Motion').onChange((value) => {
+  peopleManager.setLateralMovement(value);
+});
+
 peopleFolder.open();
+
+// MIDI System Panel
+const midiFolder = gui.addFolder('MIDI Output');
+const midiSettings = {
+  status: 'Disconnected',
+  output: 'None',
+  testNote: () => {
+    midiManager.sendTestNote();
+  }
+};
+
+// Status display (read-only)
+const midiStatusController = midiFolder.add(midiSettings, 'status').name('Status').disable();
+
+// Output selector dropdown
+const midiOutputController = midiFolder.add(midiSettings, 'output', ['None']).name('MIDI Output');
+
+// Update output dropdown when MIDI is initialized
+function updateMIDIOutputDropdown() {
+  const outputs = midiManager.getOutputNames();
+  const choices = { 'None': 'None' };
+
+  outputs.forEach(output => {
+    choices[output.name] = output.id;
+  });
+
+  // Rebuild controller with new choices
+  midiOutputController.destroy();
+  const newController = midiFolder.add(midiSettings, 'output', choices)
+    .name('MIDI Output')
+    .onChange((outputId) => {
+      if (outputId !== 'None') {
+        midiManager.connectToOutput(outputId);
+      }
+    });
+
+  // Auto-select first output if available
+  if (outputs.length > 0) {
+    midiSettings.output = outputs[0].id;
+    newController.updateDisplay();
+  }
+}
+
+// Update dropdown after a brief delay to let MIDI initialize
+setTimeout(updateMIDIOutputDropdown, 100);
+
+// Panic button
+midiSettings.panic = () => {
+  midiManager.panic();
+};
+midiFolder.add(midiSettings, 'panic').name('🚨 PANIC (All Notes Off)');
+
+// Update connection status in the GUI
+setInterval(() => {
+  const newStatus = midiManager.isConnected ? '✓ Connected' : '✗ Disconnected';
+  if (midiSettings.status !== newStatus) {
+    midiSettings.status = newStatus;
+    midiStatusController.updateDisplay();
+  }
+}, 500);
+
+midiFolder.open();
+
+// Clock/Timing Panel
+const clockFolder = gui.addFolder('Clock & Timing');
+const clockSettings = {
+  running: true,
+  bpm: 120,
+  autoBPMChange: true,
+  quantization: '16th',
+  position: '1:1:1',
+  metronome: '○',
+  startStop: () => {
+    if (clockManager.running) {
+      clockManager.stop();
+      clockSettings.running = false;
+    } else {
+      clockManager.start();
+      clockSettings.running = true;
+    }
+  },
+  reset: () => {
+    clockManager.reset();
+  }
+};
+
+// BPM control (read-only when auto-change is enabled)
+const bpmController = clockFolder.add(clockSettings, 'bpm', 60, 200, 1).name('BPM (auto-changing)').listen();
+
+// Quantization selector
+clockFolder.add(clockSettings, 'quantization', ['16th', '8th', 'quarter'])
+  .name('Quantization')
+  .onChange((value) => {
+    clockManager.setQuantization(value);
+  });
+
+// Position display (read-only)
+const positionController = clockFolder.add(clockSettings, 'position').name('Position (Bar:Beat:16th)').disable();
+
+// Visual metronome (read-only)
+const metronomeController = clockFolder.add(clockSettings, 'metronome').name('Metronome').disable();
+
+// Start/Stop button
+clockFolder.add(clockSettings, 'startStop').name('⏯ Start/Stop');
+
+// Reset button
+clockFolder.add(clockSettings, 'reset').name('⟲ Reset to 1:1:1');
+
+// Update clock displays in real-time
+let lastMetronomeBeat = -1;
+setInterval(() => {
+  const pos = clockManager.getPosition();
+  clockSettings.position = `${pos.bar}:${pos.beat}:${pos.sixteenth}`;
+  positionController.updateDisplay();
+
+  // Update BPM display (will change automatically if auto-change is enabled)
+  if (clockSettings.bpm !== clockManager.bpm) {
+    clockSettings.bpm = clockManager.bpm;
+    bpmController.updateDisplay();
+  }
+
+  // Visual metronome - show which 16th note we're on
+  const sixteenth = pos.sixteenth;
+  const metronomeChars = ['●', '○', '○', '○'];
+  metronomeChars[sixteenth - 1] = '●';
+  clockSettings.metronome = metronomeChars.join(' ');
+  metronomeController.updateDisplay();
+}, 50);
+
+clockFolder.open();
+
+// Musical Key System Panel
+const keyFolder = gui.addFolder('Musical Key (Camelot Wheel)');
+const keySettings = {
+  currentKey: '8A - A minor',
+  autoChange: true,
+  changeInterval: 16,
+  compatibleKeys: '',
+  manualChange: () => {
+    keyManager.changeToCompatibleKey();
+    triggerZones.updateMIDINotes();
+    updateKeyDisplay();
+  }
+};
+
+// Current key dropdown (all 24 keys)
+const allKeys = keyManager.getAllKeys();
+const keyChoices = {};
+allKeys.forEach(k => {
+  keyChoices[k.label] = k.value;
+});
+
+const keyController = keyFolder.add(keySettings, 'currentKey', keyChoices)
+  .name('Current Key')
+  .onChange((value) => {
+    keyManager.setKey(value);
+    triggerZones.updateMIDINotes();
+    updateKeyDisplay();
+  });
+
+// Auto change toggle
+keyFolder.add(keySettings, 'autoChange').name('Auto Key Change').onChange((value) => {
+  keyManager.setAutoChangeEnabled(value);
+});
+
+// Change interval slider
+keyFolder.add(keySettings, 'changeInterval', 4, 32, 4).name('Change Every (bars)').onChange((value) => {
+  keyManager.setAutoChangeInterval(value);
+});
+
+// Manual change button
+keyFolder.add(keySettings, 'manualChange').name('🎲 Change to Compatible Key');
+
+// Compatible keys display (read-only)
+const compatibleController = keyFolder.add(keySettings, 'compatibleKeys').name('Compatible Keys').disable();
+
+// Update key display
+function updateKeyDisplay() {
+  const info = keyManager.getInfo();
+  const keyInfo = keyManager.getCurrentKeyInfo();
+  keySettings.currentKey = `${info.currentKey} - ${keyInfo.name}`;
+  keyController.updateDisplay();
+
+  keySettings.compatibleKeys = info.compatible.join(', ');
+  compatibleController.updateDisplay();
+}
+
+// Update display periodically
+setInterval(updateKeyDisplay, 200);
+
+// Wrap the keyManager's and chordManager's onBar callbacks to update triggers
+// Master onBar callback that handles both key and chord changes
+clockManager.onBar = (barCount, pos) => {
+  const oldKey = keyManager.currentKey;
+  const oldChord = chordManager.getCurrentChord().name;
+
+  // Call chord manager's callback (handles chord changes)
+  if (chordManagerOnBar) chordManagerOnBar(barCount, pos);
+
+  // Call key manager's callback (handles key changes)
+  if (keyManagerOnBar) keyManagerOnBar(barCount, pos);
+
+  // Check if chord changed and update patterns
+  const newChord = chordManager.getCurrentChord().name;
+  if (oldChord !== newChord) {
+    triggerZones.updateChordPatterns();
+    updateChordDisplay();
+    showToast('Chord Change', `${newChord} in ${keyManager.currentKey}`, 'chord-change');
+  }
+
+  // Check if key changed and update notes
+  if (oldKey !== keyManager.currentKey) {
+    triggerZones.updateMIDINotes();
+    updateKeyDisplay();
+    showToast('Key Change', keyManager.currentKey, 'key-change');
+  }
+};
+
+// BPM change callback
+clockManager.onBPMChange = (newBPM, oldBPM) => {
+  showToast('BPM Change', `${newBPM} BPM`, 'bpm-change');
+};
+
+keyFolder.open();
+
+// Chord Progression Panel
+const chordFolder = gui.addFolder('Chord Progression');
+const chordSettings = {
+  currentChord: 'I',
+  progression: 'I-V-vi-IV',
+  autoChange: true,
+  changeInterval: 8,
+  position: '1/4',
+  manualNext: () => {
+    chordManager.manualNextChord();
+    triggerZones.updateChordPatterns();
+    updateChordDisplay();
+  }
+};
+
+// Current chord display (read-only)
+const chordController = chordFolder.add(chordSettings, 'currentChord').name('Current Chord').disable();
+
+// Chord position in progression (read-only)
+const chordPosController = chordFolder.add(chordSettings, 'position').name('Position').disable();
+
+// Progression selector
+const progressionNames = chordManager.getProgressionNames();
+const progressionController = chordFolder.add(chordSettings, 'progression', progressionNames)
+  .name('Progression')
+  .onChange((value) => {
+    chordManager.setProgression(value);
+    triggerZones.updateChordPatterns();
+    updateChordDisplay();
+  });
+
+// Auto-change toggle
+chordFolder.add(chordSettings, 'autoChange').name('Auto Change').onChange((value) => {
+  chordManager.setAutoChangeEnabled(value);
+});
+
+// Change interval slider
+chordFolder.add(chordSettings, 'changeInterval', 4, 32, 4).name('Change Every (bars)').onChange((value) => {
+  chordManager.setAutoChangeInterval(value);
+});
+
+// Manual next chord button
+chordFolder.add(chordSettings, 'manualNext').name('→ Next Chord');
+
+// Update chord display function
+function updateChordDisplay() {
+  const info = chordManager.getInfo();
+  chordSettings.currentChord = info.currentChord;
+  chordSettings.position = info.chordPosition;
+  chordController.updateDisplay();
+  chordPosController.updateDisplay();
+}
+
+// Update display periodically
+setInterval(updateChordDisplay, 200);
+
+chordFolder.open();
+
+// Trigger Zones Panel
+const triggersFolder = gui.addFolder('Trigger Zones');
+const triggersSettings = {
+  showTriggers: true,
+  info: '48 triggers, 3 zones'
+};
+
+triggersFolder.add(triggersSettings, 'showTriggers').name('Show Trigger Zones').onChange((value) => {
+  // Visualization is controlled in updateFloorTexture
+});
+
+// Info display (read-only)
+const triggersInfoController = triggersFolder.add(triggersSettings, 'info').name('Status').disable();
+
+// Update trigger info in real-time
+setInterval(() => {
+  const debugInfo = triggerZones.getDebugInfo();
+  triggersSettings.info = `${debugInfo.activeTriggers}/${debugInfo.totalTriggers} active`;
+  triggersInfoController.updateDisplay();
+}, 100);
+
+triggersFolder.open();
 
 // Cameras Panel
 const camerasFolder = gui.addFolder('Cameras');
@@ -1126,6 +1548,63 @@ camerasFolder.add(cameraModelSettings, 'model', ['OAK-D Pro PoE', 'OAK-D Pro W P
       }
     });
     markDocumentDirty();
+  });
+
+// Frustum and Raycast Visibility
+// Load from cookies if available
+const savedShowFrustums = getCookie('showFrustums');
+const savedShowRaycasts = getCookie('showRaycasts');
+console.log(`[Settings] Cookie 'showFrustums' raw value: "${savedShowFrustums}"`);
+console.log(`[Settings] Cookie 'showRaycasts' raw value: "${savedShowRaycasts}"`);
+
+const transformSettings = {
+  showFrustums: savedShowFrustums !== null ? savedShowFrustums === 'true' : true,
+  showRaycasts: savedShowRaycasts !== null ? savedShowRaycasts === 'true' : false
+};
+
+console.log(`[Settings] Show Frustums initialized to: ${transformSettings.showFrustums}`);
+console.log(`[Settings] Show Raycasts initialized to: ${transformSettings.showRaycasts}`);
+
+camerasFolder.add(transformSettings, 'showFrustums')
+  .name('Show Camera Frustums')
+  .onChange((value) => {
+    console.log(`[Settings] Show Frustums changed to: ${value}`);
+    cameraManager.cameras.forEach(cam => {
+      if (cam.frustumHelper) {
+        cam.frustumHelper.visible = value;
+      }
+      if (cam.frustumMesh) {
+        cam.frustumMesh.visible = value;
+      }
+    });
+    // Save to cookie (user preference, not document state)
+    setCookie('showFrustums', value);
+    console.log(`[Settings] Saved to cookie: showFrustums = ${value}`);
+  });
+
+// Apply initial frustum visibility from cookie to all existing cameras
+console.log(`[Settings] Applying frustum visibility (${transformSettings.showFrustums}) to ${cameraManager.cameras.length} cameras`);
+cameraManager.cameras.forEach(cam => {
+  if (cam.frustumHelper) {
+    cam.frustumHelper.visible = transformSettings.showFrustums;
+  }
+  if (cam.frustumMesh) {
+    cam.frustumMesh.visible = transformSettings.showFrustums;
+  }
+});
+
+// Apply initial raycast visibility from cookie
+console.log(`[Settings] Applying raycast visibility: ${transformSettings.showRaycasts}`);
+setShowRays(transformSettings.showRaycasts);
+
+camerasFolder.add(transformSettings, 'showRaycasts')
+  .name('Show Raycasts')
+  .onChange((value) => {
+    console.log(`[Settings] Show Raycasts changed to: ${value}`);
+    setShowRays(value);
+    // Save to cookie (user preference, not document state)
+    setCookie('showRaycasts', value);
+    console.log(`[Settings] Saved to cookie: showRaycasts = ${value}`);
   });
 
 // Transform mode toolbar (in top-left corner)
@@ -1164,29 +1643,6 @@ window.addEventListener('keydown', (event) => {
   } else if (event.key === 'e' || event.key === 'E') {
     setTransformMode('rotate');
   }
-});
-
-// Frustum visibility toggle
-const transformSettings = {
-  showFrustums: true,
-  showRaycasts: false
-};
-
-camerasFolder.add(transformSettings, 'showFrustums').name('Show Frustums').onChange((value) => {
-  cameraManager.cameras.forEach(cam => {
-    if (cam.frustumHelper) {
-      cam.frustumHelper.visible = value;
-    }
-    if (cam.frustumMesh) {
-      cam.frustumMesh.visible = value;
-    }
-  });
-  markDocumentDirty();
-});
-
-camerasFolder.add(transformSettings, 'showRaycasts').name('Show Raycasts').onChange((value) => {
-  setShowRays(value);
-  markDocumentDirty();
 });
 
 // Function to select a camera
@@ -1504,14 +1960,20 @@ function animate() {
   const deltaTime = Math.min((now - lastTime) / 1000, 0.1); // Cap at 0.1s to prevent huge jumps
   lastTime = now;
 
-  // Update people simulation (pass cameras for visibility detection)
-  peopleManager.update(deltaTime, cameraManager.cameras);
+  // Update clock system
+  clockManager.update(now);
+
+  // Update people simulation (pass all systems including MIDI and clock)
+  peopleManager.update(deltaTime, cameraManager.cameras, triggerZones, clockManager, midiManager);
 
   // Update cameras (for pulsing boundary violation lines)
   cameraManager.cameras.forEach(cam => cam.update(deltaTime));
 
-  // Update interactive floor texture
-  updateFloorTexture(now / 1000, deltaTime, hallway, peopleManager.people);
+  // Update shader floor (with trigger animations)
+  updateShaderFloor(shaderFloor, deltaTime);
+
+  // Update interactive floor texture (OLD - keeping for now as fallback debug overlay)
+  // updateFloorTexture(now / 1000, deltaTime, hallway, peopleManager.people, triggerZones, triggersSettings.showTriggers);
 
   // Update raycast visualization
   updateRaycastVisualization(raycastLines);
