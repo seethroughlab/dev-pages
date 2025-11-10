@@ -15,7 +15,8 @@ export class ChordManager {
     this.barsUntilChange = 8; // Change chord every 8 bars by default
     this.currentBar = 0;
 
-    // Define chord progressions with extended tones (7ths, 9ths, 11ths, 13ths)
+    // Define chord progressions - Pop/Accessible style
+    // Only the most popular and recognizable pop progressions using I, IV, V, vi
     // Scale degrees in major/minor scale: 0=root, 1=2nd, 2=3rd, 3=4th, 4=5th, 5=6th, 6=7th, 7=octave
     this.progressions = {
       'I-V-vi-IV': [
@@ -23,6 +24,12 @@ export class ChordManager {
         { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
         { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
         { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 }
+      ],
+      'vi-IV-I-V': [
+        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
+        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
+        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
+        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
       ],
       'I-IV-V-I': [
         { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
@@ -47,65 +54,6 @@ export class ChordManager {
         { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
         { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
         { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
-      ],
-      'vi-IV-I-V': [
-        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
-        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
-        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
-        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
-      ],
-      'ii-V-I': [
-        { name: 'ii', root: 1, third: 3, fifth: 5, seventh: 7, ninth: 2, eleventh: 4, thirteenth: 6 },
-        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
-        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 }
-      ],
-      'I-iii-IV-V': [
-        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
-        { name: 'iii', root: 2, third: 4, fifth: 6, seventh: 8, ninth: 3, eleventh: 5, thirteenth: 7 },
-        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
-        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
-      ],
-      'I-vi-ii-V': [
-        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
-        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
-        { name: 'ii', root: 1, third: 3, fifth: 5, seventh: 7, ninth: 2, eleventh: 4, thirteenth: 6 },
-        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
-      ],
-      'I-iii-vi-IV': [
-        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
-        { name: 'iii', root: 2, third: 4, fifth: 6, seventh: 8, ninth: 3, eleventh: 5, thirteenth: 7 },
-        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
-        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 }
-      ],
-      'ii-V-I-vi': [
-        { name: 'ii', root: 1, third: 3, fifth: 5, seventh: 7, ninth: 2, eleventh: 4, thirteenth: 6 },
-        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
-        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
-        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 }
-      ],
-      'vi-V-IV-V': [
-        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
-        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
-        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
-        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
-      ],
-      'I-IV-I-V': [
-        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
-        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
-        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
-        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 }
-      ],
-      'I-vi-iii-IV': [
-        { name: 'I', root: 0, third: 2, fifth: 4, seventh: 6, ninth: 1, eleventh: 3, thirteenth: 5 },
-        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 },
-        { name: 'iii', root: 2, third: 4, fifth: 6, seventh: 8, ninth: 3, eleventh: 5, thirteenth: 7 },
-        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 }
-      ],
-      'IV-V-iii-vi': [
-        { name: 'IV', root: 3, third: 5, fifth: 7, seventh: 9, ninth: 4, eleventh: 6, thirteenth: 8 },
-        { name: 'V', root: 4, third: 6, fifth: 8, seventh: 10, ninth: 5, eleventh: 7, thirteenth: 9 },
-        { name: 'iii', root: 2, third: 4, fifth: 6, seventh: 8, ninth: 3, eleventh: 5, thirteenth: 7 },
-        { name: 'vi', root: 5, third: 7, fifth: 9, seventh: 11, ninth: 6, eleventh: 8, thirteenth: 10 }
       ]
     };
 
@@ -139,44 +87,75 @@ export class ChordManager {
   /**
    * Generate scale degree patterns for each zone based on current chord
    * Returns patterns for bass, pads, and lead zones (16 triggers each)
-   * Now includes extended chord tones (7ths, 9ths, 11ths, 13ths) and 2+ octaves
+   * Pop/Accessible style: Clear melodies, simple harmonies, emphasize roots and 5ths
+   *
+   * Each pattern also includes:
+   * - weight: probability multiplier (0.0-1.0) for each note
+   * - restChance: probability this trigger doesn't fire (creates musical space)
    */
   getChordPatterns() {
     const chord = this.getCurrentChord();
-    const { root, third, fifth, seventh, ninth, eleventh, thirteenth } = chord;
+    const { root, third, fifth } = chord;
 
-    // Create multiple octaves for variety
+    // Create second octave for variety
     const rootOct2 = root + 8;
     const thirdOct2 = third + 8;
-    const ninthOct2 = ninth + 8;
+    const fifthOct2 = fifth + 8;
 
     return {
-      // BASS ZONE: Roots, fifths, octaves with some 7ths for color
-      // More varied rhythm with octave jumps and walking bass feel
-      bass: [
-        root, fifth, root, seventh,         // Root-fifth with 7th color
-        rootOct2, fifth, root, rootOct2,    // Octave jump pattern
-        root, fifth, seventh, rootOct2,     // Walking up with 7th
-        fifth, rootOct2, root, fifth        // Descending with octaves
-      ],
+      // BASS ZONE: Strong roots and fifths, walking bass lines
+      // Pop style: Emphasize root on downbeats, fifths for movement
+      bass: {
+        notes: [
+          root, root, fifth, root,           // Root emphasis (beats 1-4)
+          root, fifth, root, fifth,           // Root-fifth alternation (beats 5-8)
+          root, third, fifth, fifth,          // Walk up to fifth (beats 9-12)
+          fifth, root, root, root             // Resolve to root (beats 13-16)
+        ],
+        weights: [
+          1.0, 0.9, 0.8, 0.9,                 // Strong roots
+          1.0, 0.7, 0.9, 0.7,                 // Alternate strength
+          1.0, 0.6, 0.8, 0.8,                 // Third is subtle
+          0.7, 0.9, 1.0, 1.0                  // Strong resolution
+        ],
+        restChance: 0.25  // 25% chance of rest for breathing room
+      },
 
-      // PADS ZONE: Rich voicings with 7ths, 9ths, 11ths across 2 octaves
-      // Sustaining pad sounds benefit from extended harmony
-      pads: [
-        root, third, fifth, seventh,        // Basic 7th chord
-        ninth, fifth, seventh, rootOct2,    // Add 9th, move up
-        thirdOct2, seventh, ninth, eleventh, // Upper extensions
-        fifth, seventh, ninth, thirteenth,  // Rich 13th voicing
-      ],
+      // PADS ZONE: Simple triads, sustaining harmonies
+      // Pop style: Root, third, fifth - classic major/minor triads
+      pads: {
+        notes: [
+          root, third, fifth, third,          // Basic triad (beats 1-4)
+          fifth, root, third, fifth,          // Triad inversion (beats 5-8)
+          rootOct2, fifth, third, root,       // Upper voicing (beats 9-12)
+          fifth, thirdOct2, fifth, root       // Return to root (beats 13-16)
+        ],
+        weights: [
+          1.0, 0.8, 0.9, 0.8,                 // Balanced triad
+          0.9, 1.0, 0.8, 0.9,                 // Root strong
+          0.8, 0.9, 0.8, 1.0,                 // Upper register
+          0.9, 0.7, 0.9, 1.0                  // Resolve to root
+        ],
+        restChance: 0.35  // 35% chance of rest - pads need space
+      },
 
-      // LEAD ZONE: Melodic lines using 3rds, 5ths, 7ths, 9ths, 11ths, 13ths
-      // More melodic movement across 2+ octaves
-      lead: [
-        ninth, third, fifth, seventh,       // Start with color tone (9th)
-        rootOct2, ninth, eleventh, seventh, // Extensions + octave
-        thirteenth, ninthOct2, seventh, fifth, // Upper register descending
-        eleventh, ninth, thirdOct2, rootOct2 // Back to chord tones higher
-      ]
+      // LEAD ZONE: Melodic stepwise lines, singable melodies
+      // Pop style: Memorable hooks, stepwise motion, clear contour
+      lead: {
+        notes: [
+          fifth, fifth, third, root,          // Descending melody (beats 1-4)
+          third, fifth, fifth, third,         // Up and down (beats 5-8)
+          fifth, fifthOct2, fifth, third,     // Octave jump (beats 9-12)
+          root, third, fifth, rootOct2        // Ascending resolution (beats 13-16)
+        ],
+        weights: [
+          0.9, 0.8, 0.9, 1.0,                 // Clear descending line
+          0.8, 0.9, 0.7, 0.8,                 // Movement
+          0.8, 0.6, 0.8, 0.9,                 // Octave as ornament
+          1.0, 0.8, 0.9, 0.7                  // Resolve strong to root
+        ],
+        restChance: 0.40  // 40% chance of rest - melodies need space
+      }
     };
   }
 

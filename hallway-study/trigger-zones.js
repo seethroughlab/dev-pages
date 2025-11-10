@@ -63,6 +63,8 @@ export class TriggerZone {
       // Get current chord patterns from ChordManager (or use defaults)
       let chordPatterns;
       let currentChord = null;
+      let scaleDegree, weight = 1.0, restChance = 0.0;
+
       if (this.chordManager) {
         const patterns = this.chordManager.getChordPatterns();
         currentChord = this.chordManager.getCurrentChord();
@@ -71,16 +73,22 @@ export class TriggerZone {
           2: patterns.pads,
           3: patterns.lead
         };
+
+        // Extract note, weight, and restChance from the pattern
+        const pattern = chordPatterns[zone.id];
+        scaleDegree = pattern.notes[triggerIndexInZone];
+        weight = pattern.weights[triggerIndexInZone];
+        restChance = pattern.restChance;
       } else {
         // Fallback to static patterns if no chord manager
-        chordPatterns = {
+        const staticPatterns = {
           1: [0, 4, 0, 4, 7, 4, 0, 7, 0, 4, 7, 0, 4, 7, 0, 4],  // Bass: Roots and fifths
           2: [0, 2, 4, 7, 0, 2, 4, 7, 8, 10, 12, 15, 8, 10, 12, 15],  // Pads: Full chord tones
           3: [2, 4, 7, 9, 11, 12, 14, 2, 4, 7, 9, 11, 12, 14, 4, 7]   // Lead: Melodic upper extensions
         };
+        scaleDegree = staticPatterns[zone.id][triggerIndexInZone];
       }
 
-      const scaleDegree = chordPatterns[zone.id][triggerIndexInZone];
       const octaveOffset = zone.octaveOffset;
 
       // Determine chord tone type (root, third, fifth, seventh, ninth, etc.)
@@ -125,6 +133,10 @@ export class TriggerZone {
         scaleDegree,  // Store scale degree for chord updates
         midiNote,
         chordToneType,  // Type of chord tone (root, 3rd, 5th, 7th, 9th, 11th, 13th)
+
+        // Musicality parameters
+        weight,       // Probability multiplier (0.0-1.0)
+        restChance,   // Probability this trigger doesn't fire
 
         // State
         isActive: false,
@@ -229,15 +241,22 @@ export class TriggerZone {
       3: patterns.lead
     };
 
-    // Update each trigger's scale degree, MIDI note, and chord tone type
+    // Update each trigger's scale degree, MIDI note, chord tone type, weight, and restChance
     for (const trigger of this.triggers) {
       const zoneIndex = trigger.zoneId - 1;
       const zone = this.zones[zoneIndex];
       const triggerIndexInZone = trigger.indexInZone;
 
+      // Get pattern for this zone
+      const pattern = chordPatterns[zone.id];
+
       // Update scale degree from new chord pattern
-      const scaleDegree = chordPatterns[zone.id][triggerIndexInZone];
+      const scaleDegree = pattern.notes[triggerIndexInZone];
       trigger.scaleDegree = scaleDegree;
+
+      // Update weight and restChance
+      trigger.weight = pattern.weights[triggerIndexInZone];
+      trigger.restChance = pattern.restChance;
 
       // Determine chord tone type
       const normalizedDegree = scaleDegree % 8;

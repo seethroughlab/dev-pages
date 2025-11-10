@@ -322,20 +322,33 @@ export class Person {
             const personId = this.id;
             const zoneId = trigger.zoneId;
 
+            // Apply musicality: weighted probability and rest chance
+            const triggerWeight = trigger.weight !== undefined ? trigger.weight : 1.0;
+            const triggerRestChance = trigger.restChance !== undefined ? trigger.restChance : 0.0;
+
             clockManager.scheduleEvent(() => {
               // Safety check: only trigger if person is still in this trigger
               // (they might have left before the quantized beat arrived)
               if (this.currentTrigger && this.currentTrigger.id === triggerId) {
+                // Apply rest chance - random chance this trigger doesn't fire
+                if (Math.random() < triggerRestChance) {
+                  // console.log(`[MIDI] Rest applied (${(triggerRestChance*100).toFixed(0)}% chance)`);
+                  return; // Skip this note
+                }
+
+                // Apply weight to velocity - lower weight = quieter notes
+                const weightedVelocity = Math.round(velocityValue * triggerWeight);
+
                 // ACTIVATE VISUAL (synced with MIDI)
                 triggerZones.activateTrigger(triggerId, personId);
 
                 // Store velocity and X position on trigger for shader visualization
-                trigger.lastVelocity = normalizedVelocity;
+                trigger.lastVelocity = normalizedVelocity * triggerWeight; // Weight affects visualization too
                 trigger.lastXPosition = normalizedXPosition;
 
-                // SEND MIDI NOTE
-                midiManager.sendNoteOn(note, velocityValue, channel);
-                // console.log(`[MIDI] NoteOn: Ch${channel} Note${note} Vel${velocityValue} [${chordToneLabel}] (Zone ${zoneId}, Speed: ${this.speed.toFixed(2)})`);
+                // SEND MIDI NOTE with weighted velocity
+                midiManager.sendNoteOn(note, weightedVelocity, channel);
+                // console.log(`[MIDI] NoteOn: Ch${channel} Note${note} Vel${weightedVelocity} [${chordToneLabel}] (Zone ${zoneId}, Weight: ${triggerWeight.toFixed(2)})`);
 
                 // Track active note (for Pads zone, which sustains)
                 if (zoneId === 2) {
@@ -343,13 +356,17 @@ export class Person {
                 }
 
                 // Auto NoteOff for Bass (Zone 1) and Lead (Zone 3)
+                // Use tempo-based durations (musical time) instead of fixed milliseconds
                 if (zoneId === 1 || zoneId === 3) {
-                  // Bass and Lead have automatic NoteOff after a short duration
-                  const duration = zoneId === 1 ? 500 : 300; // Bass: 500ms, Lead: 300ms
+                  // Bass: 1 quarter note, Lead: 1 eighth note
+                  const noteDuration = zoneId === 1
+                    ? clockManager.msPerBeat           // Bass: quarter note
+                    : clockManager.msPerBeat / 2;      // Lead: eighth note
+
                   setTimeout(() => {
                     midiManager.sendNoteOff(note, channel);
                     // console.log(`[MIDI] Auto NoteOff: Ch${channel} Note${note} [${chordToneLabel}] (Zone ${zoneId})`);
-                  }, duration);
+                  }, noteDuration);
                 }
                 // Pads (Zone 2) will send NoteOff when person exits (handled above)
               }

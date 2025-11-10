@@ -1286,11 +1286,16 @@ midiFolder.open();
 
 // Clock/Timing Panel
 const clockFolder = gui.addFolder('Clock & Timing');
+
+// Load clock settings from cookies
+const savedAutoBPM = getCookie('autoBPMChange');
+const savedQuantization = getCookie('quantization');
+
 const clockSettings = {
   running: true,
   bpm: 120,
-  autoBPMChange: true,
-  quantization: '16th',
+  autoBPMChange: savedAutoBPM !== null ? savedAutoBPM === 'true' : true,
+  quantization: savedQuantization !== null ? savedQuantization : '16th',
   position: '1:1:1',
   metronome: '○',
   startStop: () => {
@@ -1307,14 +1312,37 @@ const clockSettings = {
   }
 };
 
-// BPM control (read-only when auto-change is enabled)
-const bpmController = clockFolder.add(clockSettings, 'bpm', 60, 200, 1).name('BPM (auto-changing)').listen();
+// Apply loaded settings to clock manager
+clockManager.setAutoBPMEnabled(clockSettings.autoBPMChange);
+clockManager.setQuantization(clockSettings.quantization);
+
+// Auto BPM Change toggle
+clockFolder.add(clockSettings, 'autoBPMChange').name('Auto BPM Change').onChange((value) => {
+  clockManager.setAutoBPMEnabled(value);
+  // Update BPM controller label based on auto-change state
+  bpmController.name(value ? 'BPM (auto-changing)' : 'BPM');
+  // Save to cookie
+  setCookie('autoBPMChange', value);
+});
+
+// BPM control (allows manual changes when auto-change is disabled)
+const bpmController = clockFolder.add(clockSettings, 'bpm', 60, 200, 1)
+  .name(clockSettings.autoBPMChange ? 'BPM (auto-changing)' : 'BPM')
+  .listen()
+  .onChange((value) => {
+    // Only allow manual BPM changes when auto-change is disabled
+    if (!clockSettings.autoBPMChange) {
+      clockManager.setBPM(value);
+    }
+  });
 
 // Quantization selector
 clockFolder.add(clockSettings, 'quantization', ['16th', '8th', 'quarter'])
   .name('Quantization')
   .onChange((value) => {
     clockManager.setQuantization(value);
+    // Save to cookie
+    setCookie('quantization', value);
   });
 
 // Position display (read-only)
@@ -1354,9 +1382,13 @@ clockFolder.open();
 
 // Musical Key System Panel
 const keyFolder = gui.addFolder('Musical Key (Camelot Wheel)');
+
+// Load key settings from cookies
+const savedAutoKeyChange = getCookie('autoKeyChange');
+
 const keySettings = {
   currentKey: '8A - A minor',
-  autoChange: true,
+  autoChange: savedAutoKeyChange !== null ? savedAutoKeyChange === 'true' : true,
   changeInterval: 16,
   compatibleKeys: '',
   manualChange: () => {
@@ -1365,6 +1397,9 @@ const keySettings = {
     updateKeyDisplay();
   }
 };
+
+// Apply loaded settings to key manager
+keyManager.setAutoChangeEnabled(keySettings.autoChange);
 
 // Current key dropdown (all 24 keys)
 const allKeys = keyManager.getAllKeys();
@@ -1384,6 +1419,8 @@ const keyController = keyFolder.add(keySettings, 'currentKey', keyChoices)
 // Auto change toggle
 keyFolder.add(keySettings, 'autoChange').name('Auto Key Change').onChange((value) => {
   keyManager.setAutoChangeEnabled(value);
+  // Save to cookie
+  setCookie('autoKeyChange', value);
 });
 
 // Change interval slider
@@ -1448,10 +1485,14 @@ keyFolder.open();
 
 // Chord Progression Panel
 const chordFolder = gui.addFolder('Chord Progression');
+
+// Load chord settings from cookies
+const savedAutoChordChange = getCookie('autoChordChange');
+
 const chordSettings = {
   progressionDisplay: 'I - V - vi - IV',
   progression: 'I-V-vi-IV',
-  autoChange: true,
+  autoChange: savedAutoChordChange !== null ? savedAutoChordChange === 'true' : true,
   changeInterval: 8,
   manualNext: () => {
     chordManager.manualNextChord();
@@ -1459,6 +1500,9 @@ const chordSettings = {
     updateChordDisplay();
   }
 };
+
+// Apply loaded settings to chord manager
+chordManager.setAutoChangeEnabled(chordSettings.autoChange);
 
 // Progression with highlighted current chord (read-only)
 const progressionDisplayController = chordFolder.add(chordSettings, 'progressionDisplay').name('Progression').disable();
@@ -1476,6 +1520,8 @@ const progressionController = chordFolder.add(chordSettings, 'progression', prog
 // Auto-change toggle
 chordFolder.add(chordSettings, 'autoChange').name('Auto Change').onChange((value) => {
   chordManager.setAutoChangeEnabled(value);
+  // Save to cookie
+  setCookie('autoChordChange', value);
 });
 
 // Change interval slider
