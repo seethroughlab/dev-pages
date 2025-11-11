@@ -342,9 +342,10 @@ export class Person {
                 // ACTIVATE VISUAL (synced with MIDI)
                 triggerZones.activateTrigger(triggerId, personId);
 
-                // Store velocity and X position on trigger for shader visualization
+                // Store velocity, X position, and Z direction on trigger for shader visualization
                 trigger.lastVelocity = normalizedVelocity * triggerWeight; // Weight affects visualization too
                 trigger.lastXPosition = normalizedXPosition;
+                trigger.lastXDirection = this.direction; // 1 = forward (entrance to exit), -1 = backward
 
                 // SEND MIDI NOTE with weighted velocity
                 midiManager.sendNoteOn(note, weightedVelocity, channel);

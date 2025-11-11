@@ -6,8 +6,9 @@ import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
 import { PeopleManager } from './people.js';
 import { CameraManager, setGlobalCameraModel, getGlobalCameraModel } from './camera.js';
 import { setShowRays, updateRaycastVisualization } from './visibility.js';
-import { createFloorTexture, updateFloorTexture } from './floor-texture.js';
-import { createShaderFloor, updateShaderFloor } from './floor-shader.js';
+// Floor texture no longer used - replaced by FBO system
+// import { createFloorTexture, updateFloorTexture } from './floor-texture.js';
+import { createFBOFloor, updateFBOFloor } from './floor-fbo.js';
 import { MIDIManager } from './midi-manager.js';
 import { ClockManager } from './clock-manager.js';
 import { TriggerZone } from './trigger-zones.js';
@@ -449,8 +450,8 @@ keyManagerOnBar = clockManager.onBar;
 // ===== Trigger Zone System =====
 const triggerZones = new TriggerZone(hallway, keyManager, chordManager);
 
-// ===== Shader Floor System =====
-const shaderFloor = createShaderFloor(hallway, triggerZones);
+// ===== FBO Floor System =====
+const shaderFloor = createFBOFloor(hallway, triggerZones, renderer);
 scene.add(shaderFloor);
 console.log('[Floor] Shader-based floor created with 3 zone effects');
 
@@ -2011,8 +2012,8 @@ function animate() {
   // Update cameras (for pulsing boundary violation lines)
   cameraManager.cameras.forEach(cam => cam.update(deltaTime));
 
-  // Update shader floor (with trigger animations)
-  updateShaderFloor(shaderFloor, deltaTime);
+  // Update FBO floor (with trigger animations)
+  updateFBOFloor(shaderFloor, deltaTime);
 
   // Update interactive floor texture (OLD - keeping for now as fallback debug overlay)
   // updateFloorTexture(now / 1000, deltaTime, hallway, peopleManager.people, triggerZones, triggersSettings.showTriggers);

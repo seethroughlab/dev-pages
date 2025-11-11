@@ -1,2 +1,4 @@
 
 - Although I appreciate the "single-shader" approach here, I can't help but think we could create more intricate effects if each trigger had its own instance, with an FBO and it's own logic. Although this could just be me not thinking in a very GL way.  What do you think?
+- I'm fairly sure pads just won't work. The attack time is so long, so it makes it difficult to provide meaningful, immediate visual feedback to the user that makes it clear that they are causing a sound, and which sound they are causing. I think it's much more obvious in Bass and Lead zone. But before I give up on pads altogether, I'd like to try some other visual effect that might be the best of both worlds: providing immediate, recognizable feedback to the user, as well as having a gradual style that relates to pad sounds, which have really slow attack and decay.
+- the 3 FBOs should overlap by a significant percent so that effects at the endge don't get cut off by the next zone.  
