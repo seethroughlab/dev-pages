@@ -38,3 +38,6 @@ Overall Design:
   - Rest probabilities prevent constant sound wall
   - Tempo-locked durations maintain musical timing
   - Random initialization of key and chord progression on load
+
+
+ The system uses 6 pop-friendly chord progressions (I-V-vi-IV, vi-IV-I-V, I-IV-V-I, I-vi-IV-V, I-IV-vi-V, I-V-IV-V) that automatically change every 8 bars, with all three zones updating their melodic patterns to match the new chord. Key changes occur every 16 bars using the Camelot Wheel system, which ensures harmonic compatibility by moving to adjacent keys (same letter A↔B, adjacent numbers ±1, or same number), and recalculates all MIDI notes across the 48 triggers. Both chord and key changes can be toggled on/off, and the system randomly initializes to a starting key and chord progression on load, with the current progression displayed in the UI showing the active chord in brackets.

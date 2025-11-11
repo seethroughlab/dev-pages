@@ -62,58 +62,99 @@ const fragmentShader = `
   }
 
   // Bass zone effect: Guitar string pluck (in world space)
-  vec3 bassZoneEffect(float zLocal, float xNormalized, int triggerIndex, float activation, float velocity, float zNormalized) {
+  vec3 bassZoneEffect(float zLocal, float xNormalized, int triggerIndex, float activation, float velocity, float zNormalized, float personXPos) {
     vec3 baseColor = vec3(0.0); // Black background
 
     // String position in WORLD coordinates
     float triggerSize = 1.0 / 48.0;
     float stringZPosition = (float(triggerIndex) + 0.5) * triggerSize; // Center of trigger in world space
 
-    // Draw the string as a horizontal line across the trigger
-    float stringThickness = 0.003; // Much thinner in world space (trigger is ~0.021 wide)
-    float distanceFromString = abs(zNormalized - stringZPosition);
-
     vec3 stringColor = vec3(0.0);
     float stringLine = 0.0;
 
     if (triggerStates[triggerIndex] > 0.5) {
-      // PLUCK ANIMATION
-      // String vibrates with multiple harmonics
-      float frequency = 20.0; // Base frequency (lower = wider waves)
-      float speed = 12.0; // How fast the wave travels
+      // REALISTIC PLUCK: String starts straight, gets pulled, then vibrates
 
-      // Multiple harmonics for more realistic string vibration
-      float wave1 = sin(xNormalized * frequency - activation * speed);
-      float wave2 = sin(xNormalized * frequency * 2.0 - activation * speed * 1.5) * 0.5;
-      float wave3 = sin(xNormalized * frequency * 3.0 - activation * speed * 2.0) * 0.25;
+      // Phase 1: Initial pull (0-50ms) - string is pulled to one side
+      // Phase 2: Release & vibration (50ms+) - string vibrates after release
+      float pullTime = 0.05; // 50ms pull duration
 
-      float stringVibration = (wave1 + wave2 + wave3) / 1.75;
+      float displacement = 0.0;
 
-      // Decay over time (string dampens)
-      float decay = exp(-activation * 2.5);
-      stringVibration *= decay;
+      if (activation < pullTime) {
+        // PHASE 1: PULLING THE STRING
+        // Create a triangular displacement centered at pluck point
+        float pullProgress = activation / pullTime; // 0 to 1
 
-      // Displacement scaled for WORLD SPACE (trigger size is ~0.021)
-      // Velocity ranges from 0.0 (slow) to 1.0 (fast)
-      // Faster movement = bigger pluck
-      float velocityScale = 0.5 + velocity * 2.0; // 0.5x to 2.5x based on velocity
-      // Scale displacement to world space: max displacement = ~1/3 of trigger width
-      float displacement = stringVibration * 0.007 * velocityScale; // ~1/3 of trigger size when fully plucked
+        // Distance from pluck point (across the width)
+        float distFromPluck = abs(xNormalized - personXPos);
 
-      float vibratingStringDist = abs(zNormalized - (stringZPosition + displacement));
+        // Triangular shape: displacement is highest at pluck point, zero at edges
+        // Width of the pulled section
+        float pullWidth = 0.3; // How wide the "pulled" section is
+        float triangleShape = max(0.0, 1.0 - distFromPluck / pullWidth);
 
-      // Make the string brighter and thicker when vibrating (reduced by half)
-      stringLine = smoothstep(stringThickness * 1.5, 0.0, vibratingStringDist);
+        // Pull amount increases during pull phase, scaled by velocity
+        float pullAmount = pullProgress * triangleShape * (0.5 + velocity * 1.5);
 
-      // Brightness based on vibration amplitude AND velocity (reduced by half)
-      float brightness = (abs(stringVibration) * 2.0 + 0.75) * (0.7 + velocity * 0.3);
+        // Displacement in world space (perpendicular to string)
+        displacement = pullAmount * 0.01; // Max ~0.01 units displacement
+
+      } else {
+        // PHASE 2: STRING VIBRATION AFTER RELEASE
+        float vibrationTime = activation - pullTime;
+
+        // Exponential decay
+        float decay = exp(-vibrationTime * 2.0);
+
+        // Traveling waves emanating from pluck point
+        // Distance from pluck point
+        float distFromPluck = abs(xNormalized - personXPos);
+
+        // Two waves traveling in opposite directions from pluck point
+        float waveSpeed = 8.0; // How fast waves travel along string
+        float frequency = 25.0; // Vibration frequency
+
+        // Wave traveling right
+        float waveRight = sin((xNormalized - personXPos) * frequency - vibrationTime * waveSpeed);
+        // Wave traveling left
+        float waveLeft = sin((personXPos - xNormalized) * frequency - vibrationTime * waveSpeed);
+
+        // Combine waves (interference pattern)
+        float wave = (waveRight + waveLeft) * 0.5;
+
+        // Amplitude decreases with distance from pluck point (energy spreads out)
+        float amplitudeFalloff = exp(-distFromPluck * 2.0);
+
+        // Final vibration with decay and velocity scaling
+        displacement = wave * decay * amplitudeFalloff * (0.5 + velocity * 1.5) * 0.008;
+      }
+
+      // Apply displacement to string position
+      float displacedStringZ = stringZPosition + displacement;
+      float distanceFromString = abs(zNormalized - displacedStringZ);
+
+      // String thickness - varies with activation
+      float baseThickness = 0.002;
+      float maxThickness = 0.006;
+
+      // Thicker during initial pull and when vibrating strongly
+      float thicknessFactor = 1.0 + abs(displacement) * 300.0; // Thicker when displaced more
+      float thickness = mix(baseThickness, maxThickness, min(thicknessFactor, 1.0));
+
+      // Draw the string
+      stringLine = smoothstep(thickness, 0.0, distanceFromString);
+
+      // Brightness increases with displacement
+      float brightness = 0.8 + abs(displacement) * 200.0 * (0.7 + velocity * 0.3);
+      brightness = min(brightness, 3.0); // Cap brightness
+
       stringColor = ZONE_1_COLOR * brightness;
 
-      // Add glow around vibrating string, scaled by velocity (reduced by half)
-      float glow = exp(-vibratingStringDist * 16.0) * decay * (0.25 + velocity * 0.25);
-      stringColor += vec3(glow);
+      // Glow around the string
+      float glow = exp(-distanceFromString * 120.0) * abs(displacement) * 100.0;
+      stringColor += ZONE_1_COLOR * glow * 0.5;
     }
-    // No static string when inactive - pure black
 
     // Combine base color with string
     vec3 finalColor = mix(baseColor, stringColor, stringLine);
@@ -251,15 +292,15 @@ const fragmentShader = `
     vec3 finalColor;
     if (zone == 0) {
       // Bass zone - check immediate neighbors for overflow
-      finalColor = bassZoneEffect(zLocal, xNormalized, triggerIndex, activation, velocity, zNormalized);
+      finalColor = bassZoneEffect(zLocal, xNormalized, triggerIndex, activation, velocity, zNormalized, personXPos);
 
       // Check previous and next triggers for overflow (within Bass zone: 0-15)
       if (triggerIndex > 0 && triggerStates[triggerIndex - 1] > 0.5) {
-        vec3 neighborEffect = bassZoneEffect(zLocal, xNormalized, triggerIndex - 1, triggerActivations[triggerIndex - 1], triggerVelocities[triggerIndex - 1], zNormalized);
+        vec3 neighborEffect = bassZoneEffect(zLocal, xNormalized, triggerIndex - 1, triggerActivations[triggerIndex - 1], triggerVelocities[triggerIndex - 1], zNormalized, triggerXPositions[triggerIndex - 1]);
         finalColor = max(finalColor, neighborEffect);
       }
       if (triggerIndex < 15 && triggerStates[triggerIndex + 1] > 0.5) {
-        vec3 neighborEffect = bassZoneEffect(zLocal, xNormalized, triggerIndex + 1, triggerActivations[triggerIndex + 1], triggerVelocities[triggerIndex + 1], zNormalized);
+        vec3 neighborEffect = bassZoneEffect(zLocal, xNormalized, triggerIndex + 1, triggerActivations[triggerIndex + 1], triggerVelocities[triggerIndex + 1], zNormalized, triggerXPositions[triggerIndex + 1]);
         finalColor = max(finalColor, neighborEffect);
       }
     } else if (zone == 1) {
