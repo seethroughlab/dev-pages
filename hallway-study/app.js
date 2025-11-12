@@ -6,8 +6,6 @@ import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
 import { PeopleManager } from './people.js';
 import { CameraManager, setGlobalCameraModel, getGlobalCameraModel } from './camera.js';
 import { setShowRays, updateRaycastVisualization } from './visibility.js';
-// Floor texture no longer used - replaced by FBO system
-// import { createFloorTexture, updateFloorTexture } from './floor-texture.js';
 import { createFBOFloor, updateFBOFloor } from './floor-fbo.js';
 import { MIDIManager } from './midi-manager.js';
 import { ClockManager } from './clock-manager.js';
@@ -100,7 +98,10 @@ orthographicCamera.layers.enableAll();
 
 // Active camera (starts as perspective)
 let camera = perspectiveCamera;
-let isPerspective = true;
+// Load isPerspective from cookie (defaults to true)
+const savedIsPerspective = getCookie('isPerspective');
+let isPerspective = savedIsPerspective !== null ? savedIsPerspective === 'true' : true;
+console.log(`[Settings] isPerspective initialized to: ${isPerspective}`);
 
 // ===== Renderer Setup =====
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -127,6 +128,21 @@ orthographicControls.update();
 orthographicControls.enabled = false; // Disabled initially
 
 let activeControls = perspectiveControls;
+
+// Auto-save orbit controls to cookie when user moves camera (debounced)
+let orbitControlsSaveTimeout;
+function setupOrbitControlsSaving() {
+  const saveHandler = () => {
+    clearTimeout(orbitControlsSaveTimeout);
+    orbitControlsSaveTimeout = setTimeout(() => {
+      saveOrbitControlsToCookie();
+      console.log('[Settings] Saved orbit controls to cookie');
+    }, 1000); // Save 1 second after user stops moving
+  };
+
+  perspectiveControls.addEventListener('change', saveHandler);
+  orthographicControls.addEventListener('change', saveHandler);
+}
 
 // ===== Transform Controls =====
 const transformControls = new TransformControls(perspectiveCamera, renderer.domElement);
@@ -251,27 +267,6 @@ function buildHallway() {
   const H = hallway.height_m;
 
   const hallGroup = new THREE.Group();
-
-  // OLD Floor with interactive texture - REPLACED by shader floor
-  // Keeping this code commented for reference, but shader floor is now used instead
-  // const floorGeo = new THREE.PlaneGeometry(W, L, 1, 1);
-  // floorGeo.rotateX(-Math.PI / 2);
-  //
-  // // Create interactive floor texture
-  // const floorTexture = createFloorTexture(hallway);
-  //
-  // const floorMat = new THREE.MeshStandardMaterial({
-  //   map: floorTexture,
-  //   roughness: 0.9,
-  //   metalness: 0.0,
-  //   emissive: 0x000000,
-  //   emissiveMap: floorTexture,
-  //   emissiveIntensity: 0.3 // Add slight glow
-  // });
-  // const floor = new THREE.Mesh(floorGeo, floorMat);
-  // floor.position.y = 0;
-  // floor.receiveShadow = true;
-  // hallGroup.add(floor);
 
   // Half dimensions for convenience
   const hw = W / 2;
@@ -485,11 +480,190 @@ togglePreviewsBtn.addEventListener('click', () => {
   } else {
     multiPreviewPanel.classList.remove('collapsed');
   }
+
+  // Update floor panel position based on camera panel state
+  updateFloorPanelPosition();
 });
 
 // Start collapsed
 multiPreviewPanel.classList.add('collapsed');
 previewsPanelCollapsed = true;
+
+// ===== Floor FBO Preview Setup =====
+const floorPreviewPanel = document.getElementById('floor-preview-panel');
+const toggleFloorPreviewBtn = document.getElementById('toggle-floor-preview');
+const floorPreviewCanvas = document.getElementById('floor-preview-canvas');
+
+// Set up WebGL renderer for floor preview
+// Use fixed reasonable dimensions for now (aspect ratio doesn't need to be exact for debugging)
+const floorPreviewWidth = 800;
+const floorPreviewHeight = 600; // Fixed height for testing
+console.log('[Floor Preview] Using fixed dimensions - width:', floorPreviewWidth, 'height:', floorPreviewHeight);
+
+// IMPORTANT: The canvas may have gotten a 2D context earlier, which blocks WebGL
+// Hard refresh (Cmd+Shift+R / Ctrl+Shift+R) if you see black
+console.log('[Floor Preview] ===== CODE VERSION: 2025-01-12-TIMESTAMP-12345 ===== LATEST CODE RUNNING =====');
+console.log('[Floor Preview] Canvas element:', floorPreviewCanvas);
+console.log('[Floor Preview] Canvas clientWidth:', floorPreviewCanvas.clientWidth, 'clientHeight:', floorPreviewCanvas.clientHeight);
+console.log('[Floor Preview] Canvas width:', floorPreviewCanvas.width, 'height:', floorPreviewCanvas.height);
+console.log('[Floor Preview] Canvas offsetWidth:', floorPreviewCanvas.offsetWidth, 'offsetHeight:', floorPreviewCanvas.offsetHeight);
+
+console.log('[Floor Preview] Creating WebGL renderer');
+const floorPreviewRenderer = new THREE.WebGLRenderer({
+  canvas: floorPreviewCanvas,
+  antialias: true,
+  alpha: false
+});
+console.log('[Floor Preview] WebGL context:', floorPreviewRenderer.getContext());
+floorPreviewRenderer.setSize(floorPreviewWidth, floorPreviewHeight);
+floorPreviewRenderer.setClearColor(0xff0000); // Bright red to test if rendering works
+console.log('[Floor Preview] Renderer created, clear color set to RED (0xff0000)');
+console.log('[Floor Preview] After setSize - Canvas width:', floorPreviewCanvas.width, 'height:', floorPreviewCanvas.height);
+
+// Create scene with just the floor for top-down view
+const floorPreviewScene = new THREE.Scene();
+// Simple orthographic camera that fills the viewport
+const floorPreviewCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+floorPreviewCamera.position.set(0, 0, 1);
+floorPreviewCamera.lookAt(0, 0, 0);
+floorPreviewCamera.updateProjectionMatrix();
+
+let floorPreviewReady = false;
+let floorPreviewStylesLogged = false;
+
+function setupFloorPreviewTextures() {
+  console.log('[Floor Preview] Setup called');
+
+  // First add a test mesh to verify rendering works - simple 2x2 plane at z=0
+  const testGeometry = new THREE.PlaneGeometry(2, 2);
+  const testMaterial = new THREE.MeshBasicMaterial({
+    color: 0xff0000,
+    side: THREE.DoubleSide
+  });
+  const testMesh = new THREE.Mesh(testGeometry, testMaterial);
+  testMesh.position.set(0, 0, 0);
+  floorPreviewScene.add(testMesh);
+
+  console.log('[Floor Preview] Added test red plane at origin');
+
+  if (shaderFloor) {
+    // After 2 seconds, replace with the actual floor material
+    setTimeout(() => {
+      testMesh.material = shaderFloor.material;
+      console.log('[Floor Preview] Switched to floor material');
+    }, 2000);
+
+    floorPreviewReady = true;
+  } else {
+    console.error('[Floor Preview] shaderFloor not ready');
+  }
+}
+
+// Collapse/expand functionality for floor preview
+let floorPreviewPanelCollapsed = true;
+toggleFloorPreviewBtn.addEventListener('click', () => {
+  floorPreviewPanelCollapsed = !floorPreviewPanelCollapsed;
+  if (floorPreviewPanelCollapsed) {
+    floorPreviewPanel.classList.add('collapsed');
+  } else {
+    floorPreviewPanel.classList.remove('collapsed');
+  }
+});
+
+// Start collapsed
+floorPreviewPanel.classList.add('collapsed');
+
+// Function to update floor panel position based on camera panel state
+function updateFloorPanelPosition() {
+  if (previewsPanelCollapsed) {
+    floorPreviewPanel.classList.add('camera-panel-collapsed');
+  } else {
+    floorPreviewPanel.classList.remove('camera-panel-collapsed');
+  }
+}
+
+// Initialize floor panel position
+updateFloorPanelPosition();
+
+// Initialize floor preview textures (link to FBO outputs)
+setupFloorPreviewTextures();
+
+// ===== Depth Visualization Setup =====
+// Depth visualization mode toggle (false = RGB, true = depth)
+let depthVisualizationMode = false;
+
+// Depth visualization shader (Oak-D style: near = warm, far = cool)
+const depthVisualizationShader = {
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    #include <packing>
+
+    uniform sampler2D tDepth;
+    uniform float cameraNear;
+    uniform float cameraFar;
+    varying vec2 vUv;
+
+    // Convert non-linear depth buffer value to linear depth
+    float readDepth(sampler2D depthSampler, vec2 coord) {
+      float fragCoordZ = texture2D(depthSampler, coord).x;
+      // Convert from [0,1] non-linear depth to view space Z (negative values)
+      float viewZ = perspectiveDepthToViewZ(fragCoordZ, cameraNear, cameraFar);
+      // viewZ is negative, so we take abs and normalize to [0,1]
+      // 0 = near plane (0.7m), 1 = far plane (12m)
+      float linearDepth = (-viewZ - cameraNear) / (cameraFar - cameraNear);
+      return clamp(linearDepth, 0.0, 1.0);
+    }
+
+    // Oak-D style colormap: warm (near) to cool (far)
+    vec3 depthToColor(float depth) {
+      // depth is 0 (near) to 1 (far)
+      // Invert so near is 1.0, far is 0.0
+      float d = 1.0 - clamp(depth, 0.0, 1.0);
+
+      // Smoother color transitions to reduce flickering
+      // Use smoothstep for gradual transitions between color stops
+      vec3 color1 = vec3(0.0, 0.0, 0.2);    // Very far: dark blue
+      vec3 color2 = vec3(0.0, 0.3, 0.9);    // Far: blue
+      vec3 color3 = vec3(0.0, 0.8, 0.8);    // Mid-far: cyan
+      vec3 color4 = vec3(0.1, 0.9, 0.3);    // Mid: green
+      vec3 color5 = vec3(1.0, 0.85, 0.0);   // Near: yellow
+      vec3 color6 = vec3(1.0, 0.15, 0.0);   // Very near: red
+
+      // Smooth interpolation between 6 color stops
+      vec3 color;
+      if (d < 0.2) {
+        float t = smoothstep(0.0, 0.2, d);
+        color = mix(color1, color2, t);
+      } else if (d < 0.4) {
+        float t = smoothstep(0.2, 0.4, d);
+        color = mix(color2, color3, t);
+      } else if (d < 0.6) {
+        float t = smoothstep(0.4, 0.6, d);
+        color = mix(color3, color4, t);
+      } else if (d < 0.8) {
+        float t = smoothstep(0.6, 0.8, d);
+        color = mix(color4, color5, t);
+      } else {
+        float t = smoothstep(0.8, 1.0, d);
+        color = mix(color5, color6, t);
+      }
+
+      return color;
+    }
+
+    void main() {
+      float depth = readDepth(tDepth, vUv);
+      vec3 color = depthToColor(depth);
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `
+};
 
 // Function to create a preview item for a camera
 function createCameraPreviewItem(cam) {
@@ -516,10 +690,51 @@ function createCameraPreviewItem(cam) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setSize(220, 138);
 
-  // Store renderer and canvas on the item
+  // Create depth render target with depth texture
+  const depthRenderTarget = new THREE.WebGLRenderTarget(220, 138, {
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+    format: THREE.RGBAFormat,
+    type: THREE.UnsignedByteType,
+    depthBuffer: true,
+    stencilBuffer: false,
+    generateMipmaps: false
+  });
+  depthRenderTarget.depthTexture = new THREE.DepthTexture(220, 138);
+  depthRenderTarget.depthTexture.format = THREE.DepthFormat;
+  depthRenderTarget.depthTexture.type = THREE.UnsignedIntType;
+  depthRenderTarget.depthTexture.minFilter = THREE.NearestFilter;
+  depthRenderTarget.depthTexture.magFilter = THREE.NearestFilter;
+
+  // Create depth visualization material
+  const depthVisualizationMaterial = new THREE.ShaderMaterial({
+    vertexShader: depthVisualizationShader.vertexShader,
+    fragmentShader: depthVisualizationShader.fragmentShader,
+    uniforms: {
+      tDepth: { value: depthRenderTarget.depthTexture },
+      cameraNear: { value: cam.minRange_m },
+      cameraFar: { value: cam.maxRange_m }
+    }
+  });
+
+  // Create fullscreen quad for displaying depth visualization
+  const quadGeometry = new THREE.PlaneGeometry(2, 2);
+  const depthQuad = new THREE.Mesh(quadGeometry, depthVisualizationMaterial);
+
+  // Create orthographic camera for rendering the depth quad
+  const depthQuadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+  // Create scene for the depth quad
+  const depthScene = new THREE.Scene();
+  depthScene.add(depthQuad);
+
+  // Store renderer, canvas, and depth visualization components on the item
   item.previewRenderer = renderer;
   item.previewCanvas = canvas;
   item.camera = cam;
+  item.depthRenderTarget = depthRenderTarget;
+  item.depthScene = depthScene;
+  item.depthQuadCamera = depthQuadCamera;
 
   // Click to select camera
   item.addEventListener('click', () => {
@@ -553,6 +768,10 @@ function removeCameraPreviewItem(cam) {
   const item = cameraPreviewItems.get(cam.id);
   if (item) {
     item.previewRenderer.dispose();
+    if (item.depthRenderTarget) {
+      item.depthRenderTarget.dispose();
+      item.depthRenderTarget.depthTexture.dispose();
+    }
     item.remove();
     cameraPreviewItems.delete(cam.id);
     updatePreviewCount();
@@ -645,24 +864,52 @@ function serializeDocument() {
       pitch: cam.pitch,
       roll: cam.roll
     })),
-    orbitControls: {
-      position: {
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z
-      },
-      target: {
-        x: activeControls.target.x,
-        y: activeControls.target.y,
-        z: activeControls.target.z
-      }
-    },
     settings: {
-      peopleCount: peopleSettings.count,
-      isPerspective: isPerspective,
       cameraModel: getGlobalCameraModel()
     }
   };
+}
+
+// Save/load orbit controls to/from cookies (user preference, not document state)
+function saveOrbitControlsToCookie() {
+  const orbitData = {
+    position: {
+      x: camera.position.x,
+      y: camera.position.y,
+      z: camera.position.z
+    },
+    target: {
+      x: activeControls.target.x,
+      y: activeControls.target.y,
+      z: activeControls.target.z
+    }
+  };
+  setCookie('orbitControls', JSON.stringify(orbitData));
+}
+
+function loadOrbitControlsFromCookie() {
+  const saved = getCookie('orbitControls');
+  if (saved) {
+    try {
+      const orbitData = JSON.parse(saved);
+      camera.position.set(
+        orbitData.position.x,
+        orbitData.position.y,
+        orbitData.position.z
+      );
+      activeControls.target.set(
+        orbitData.target.x,
+        orbitData.target.y,
+        orbitData.target.z
+      );
+      activeControls.update();
+      console.log('[Settings] Loaded orbit controls from cookie');
+      return true;
+    } catch (e) {
+      console.error('[Settings] Failed to load orbit controls from cookie:', e);
+    }
+  }
+  return false;
 }
 
 function deserializeDocument(data) {
@@ -712,29 +959,8 @@ function deserializeDocument(data) {
     createCameraPreviewItem(cam);
   });
 
-  // Restore orbit controls
-  camera.position.set(
-    data.orbitControls.position.x,
-    data.orbitControls.position.y,
-    data.orbitControls.position.z
-  );
-  activeControls.target.set(
-    data.orbitControls.target.x,
-    data.orbitControls.target.y,
-    data.orbitControls.target.z
-  );
-  activeControls.update();
-
-  // Restore settings
-  peopleSettings.count = data.settings.peopleCount;
-  peopleManager.setCount(data.settings.peopleCount);
-
-  // Don't restore showFrustums or showRaycasts - they're user preferences saved in cookies, not document state
-
-  // Restore camera mode
-  if (data.settings.isPerspective !== isPerspective) {
-    toggleCameraMode();
-  }
+  // Note: Orbit controls, peopleCount, and isPerspective are now saved in cookies (user preferences), not in documents
+  // Old documents that have these settings will ignore them
 
   documentName = data.name || 'Untitled';
   documentDirty = false;
@@ -789,18 +1015,6 @@ async function loadPresetDocuments() {
         pitch: cam.pitch,
         roll: cam.roll
       })),
-      orbitControls: {
-        position: {
-          x: evalExpression(preset.orbitControls.position.x),
-          y: evalExpression(preset.orbitControls.position.y),
-          z: evalExpression(preset.orbitControls.position.z)
-        },
-        target: {
-          x: evalExpression(preset.orbitControls.target.x),
-          y: evalExpression(preset.orbitControls.target.y),
-          z: evalExpression(preset.orbitControls.target.z)
-        }
-      },
       settings: preset.settings
     }));
 
@@ -824,7 +1038,6 @@ function getPresetDocument(name) {
       name: preset.name,
       timestamp: Date.now(),
       cameras: preset.cameras,
-      orbitControls: preset.orbitControls,
       settings: preset.settings
     };
   }
@@ -883,21 +1096,7 @@ function exportCurrentAsPresetJSON() {
       pitch: cam.pitch,
       roll: cam.roll
     })),
-    orbitControls: {
-      position: {
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z
-      },
-      target: {
-        x: activeControls.target.x,
-        y: toExpression(activeControls.target.y, 'height_m/2'),
-        z: activeControls.target.z
-      }
-    },
     settings: {
-      peopleCount: peopleSettings.count,
-      isPerspective: isPerspective,
       cameraModel: getGlobalCameraModel()
     }
   };
@@ -1009,9 +1208,7 @@ function newDocument() {
   // Deselect any active camera
   deselectAllCameras();
 
-  // Reset settings
-  peopleSettings.count = 3;
-  peopleManager.setCount(3);
+  // Note: peopleCount and isPerspective are user preferences (cookies), not reset on new document
 
   documentName = 'Untitled';
   documentDirty = false;
@@ -1156,6 +1353,21 @@ function refreshDocumentDropdown() {
   }
 
   refreshDocumentDropdown();
+
+  // Load orbit controls from cookie (after document is loaded)
+  loadOrbitControlsFromCookie();
+
+  // Apply initial camera mode from cookie
+  if (!isPerspective) {
+    // Need to switch to orthographic (default is perspective)
+    toggleCameraMode();
+  }
+
+  // Apply initial people count from cookie
+  peopleManager.setCount(initialPeopleCount);
+
+  // Setup auto-save for orbit controls
+  setupOrbitControlsSaving();
 })();
 
 fileFolder.add({ newDoc: newDocument }, 'newDoc').name('New Document');
@@ -1207,14 +1419,22 @@ importExportFolder.close(); // Collapsed by default
 
 // People Simulation Panel
 const peopleFolder = gui.addFolder('People Simulation');
+
+// Load people count from cookie (defaults to 3)
+const savedPeopleCount = getCookie('peopleCount');
+const initialPeopleCount = savedPeopleCount !== null ? parseInt(savedPeopleCount, 10) : 3;
+console.log(`[Settings] peopleCount initialized to: ${initialPeopleCount}`);
+
 const peopleSettings = {
-  count: 3,
+  count: initialPeopleCount,
   lateralMovement: true
 };
 
 peopleFolder.add(peopleSettings, 'count', 0, 12, 1).name('Count').onChange((value) => {
   peopleManager.setCount(value);
-  markDocumentDirty();
+  // Save to cookie (user preference, not document state)
+  setCookie('peopleCount', value);
+  console.log(`[Settings] Saved to cookie: peopleCount = ${value}`);
 });
 
 peopleFolder.add(peopleSettings, 'lateralMovement').name('Sideways Motion').onChange((value) => {
@@ -1547,29 +1767,6 @@ setInterval(updateChordDisplay, 200);
 
 chordFolder.open();
 
-// Trigger Zones Panel
-const triggersFolder = gui.addFolder('Trigger Zones');
-const triggersSettings = {
-  showTriggers: true,
-  info: '48 triggers, 3 zones'
-};
-
-triggersFolder.add(triggersSettings, 'showTriggers').name('Show Trigger Zones').onChange((value) => {
-  // Visualization is controlled in updateFloorTexture
-});
-
-// Info display (read-only)
-const triggersInfoController = triggersFolder.add(triggersSettings, 'info').name('Status').disable();
-
-// Update trigger info in real-time
-setInterval(() => {
-  const debugInfo = triggerZones.getDebugInfo();
-  triggersSettings.info = `${debugInfo.activeTriggers}/${debugInfo.totalTriggers} active`;
-  triggersInfoController.updateDisplay();
-}, 100);
-
-triggersFolder.open();
-
 // Cameras Panel
 const camerasFolder = gui.addFolder('Cameras');
 
@@ -1591,6 +1788,30 @@ camerasFolder.add(cameraModelSettings, 'model', ['OAK-D Pro PoE', 'OAK-D Pro W P
       }
     });
     markDocumentDirty();
+  });
+
+// Depth Visualization Mode
+// Load from cookies if available
+const savedShowDepth = getCookie('showDepthVisualization');
+console.log(`[Settings] Cookie 'showDepthVisualization' raw value: "${savedShowDepth}"`);
+
+const depthSettings = {
+  showDepthVisualization: savedShowDepth !== null ? savedShowDepth === 'true' : false
+};
+
+console.log(`[Settings] Show Depth Visualization initialized to: ${depthSettings.showDepthVisualization}`);
+
+// Apply initial value to global state
+depthVisualizationMode = depthSettings.showDepthVisualization;
+
+camerasFolder.add(depthSettings, 'showDepthVisualization')
+  .name('Depth View (Cameras)')
+  .onChange((value) => {
+    console.log(`[Settings] Show Depth Visualization changed to: ${value}`);
+    depthVisualizationMode = value;
+    // Save to cookie (user preference, not document state)
+    setCookie('showDepthVisualization', value);
+    console.log(`[Settings] Saved to cookie: showDepthVisualization = ${value}`);
   });
 
 // Frustum and Raycast Visibility
@@ -1896,6 +2117,10 @@ const viewLabel = document.getElementById('view-label');
 function toggleCameraMode() {
   isPerspective = !isPerspective;
 
+  // Save to cookie (user preference, not document state)
+  setCookie('isPerspective', isPerspective);
+  console.log(`[Settings] Saved to cookie: isPerspective = ${isPerspective}`);
+
   if (isPerspective) {
     // Switch to perspective
     camera = perspectiveCamera;
@@ -2015,9 +2240,6 @@ function animate() {
   // Update FBO floor (with trigger animations)
   updateFBOFloor(shaderFloor, deltaTime);
 
-  // Update interactive floor texture (OLD - keeping for now as fallback debug overlay)
-  // updateFloorTexture(now / 1000, deltaTime, hallway, peopleManager.people, triggerZones, triggersSettings.showTriggers);
-
   // Update raycast visualization
   updateRaycastVisualization(raycastLines);
 
@@ -2031,9 +2253,52 @@ function animate() {
   cameraPreviewItems.forEach((item) => {
     if (item.camera && item.previewRenderer) {
       const previewCam = item.camera.getPreviewCamera();
-      item.previewRenderer.render(scene, previewCam);
+
+      if (depthVisualizationMode) {
+        // Render to depth render target first
+        item.previewRenderer.setRenderTarget(item.depthRenderTarget);
+        item.previewRenderer.render(scene, previewCam);
+        item.previewRenderer.setRenderTarget(null);
+
+        // Then render the depth visualization to the canvas
+        item.previewRenderer.render(item.depthScene, item.depthQuadCamera);
+      } else {
+        // Render RGB from camera's perspective
+        item.previewRenderer.render(scene, previewCam);
+      }
     }
   });
+
+  // Render floor FBO preview (top-down view)
+  if (!floorPreviewPanelCollapsed && floorPreviewReady) {
+    // Log computed styles once
+    if (!floorPreviewStylesLogged) {
+      floorPreviewStylesLogged = true;
+      const computed = window.getComputedStyle(floorPreviewCanvas);
+      console.log('[Floor Preview] Computed styles:', {
+        display: computed.display,
+        visibility: computed.visibility,
+        opacity: computed.opacity,
+        width: computed.width,
+        height: computed.height,
+        position: computed.position,
+        zIndex: computed.zIndex,
+        transform: computed.transform
+      });
+
+      // Check the actual pixel data to see if it's red
+      const gl = floorPreviewRenderer.getContext();
+      const pixels = new Uint8Array(4);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      console.log('[Floor Preview] Pixel at (0,0):', `rgba(${pixels[0]}, ${pixels[1]}, ${pixels[2]}, ${pixels[3]})`);
+      console.log('[Floor Preview] Expected red: rgba(255, 0, 0, 255)');
+    }
+
+    // Force clear with red color
+    floorPreviewRenderer.setClearColor(0xff0000, 1.0);
+    floorPreviewRenderer.clear(true, true, true);
+    floorPreviewRenderer.render(floorPreviewScene, floorPreviewCamera);
+  }
 }
 
 animate();

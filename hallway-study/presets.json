@@ -27,23 +27,8 @@
         "roll": 0
       }
     ],
-    "orbitControls": {
-      "position": {
-        "x": 2.2880308107060596,
-        "y": 9.75166844954058,
-        "z": -14.47785297350175
-      },
-      "target": {
-        "x": -1.7704711505716608,
-        "y": 0.8654541399848035,
-        "z": -7.348817927652636
-      }
-    },
     "settings": {
-      "peopleCount": 3,
-      "showFrustums": true,
-      "showRaycasts": false,
-      "isPerspective": true
+      "cameraModel": "OAK-D Pro PoE"
     }
   },
   {
@@ -86,23 +71,8 @@
         "roll": 0
       }
     ],
-    "orbitControls": {
-      "position": {
-        "x": 11.347385275094442,
-        "y": 5.176231410725294,
-        "z": -4.097670691309316
-      },
-      "target": {
-        "x": 0.1090392904201926,
-        "y": 1.4476841641006943,
-        "z": -1.6365939821343274
-      }
-    },
     "settings": {
-      "peopleCount": 3,
-      "showFrustums": true,
-      "showRaycasts": false,
-      "isPerspective": true
+      "cameraModel": "OAK-D Pro PoE"
     }
   },
   {
@@ -145,23 +115,8 @@
       "roll": -1.8170500913638027e-14
     }
   ],
-  "orbitControls": {
-    "position": {
-      "x": 5.834663348276907,
-      "y": 11.689321562278568,
-      "z": 3.6008670952589523
-    },
-    "target": {
-      "x": 0,
-      "y": "height_m / 2",
-      "z": 0
-    }
-  },
   "settings": {
-    "peopleCount": 3,
-    "showFrustums": true,
-    "showRaycasts": false,
-    "isPerspective": true
+    "cameraModel": "OAK-D Pro PoE"
   }
 }
 ]

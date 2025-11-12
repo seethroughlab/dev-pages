@@ -163,6 +163,28 @@ canvas {
   transform: translateY(calc(100% - 40px));
 }
 
+/* Floor FBO Preview Panel - stacks above camera panel */
+.floor-preview-panel {
+  position: fixed;
+  bottom: 240px; /* Camera panel header (40px) + content (200px) */
+  left: 0;
+  right: 0;
+  background: rgba(10, 14, 20, 0.95);
+  border-top: 1px solid #314150;
+  z-index: 999;
+  transition: transform 0.3s ease, bottom 0.3s ease;
+}
+
+/* When floor panel is collapsed, move it down to show only header */
+.floor-preview-panel.collapsed {
+  transform: translateY(calc(100% - 40px));
+}
+
+/* When camera panel is collapsed, floor panel sits lower */
+.floor-preview-panel.camera-panel-collapsed {
+  bottom: 40px; /* Just the camera panel header height */
+}
+
 .multi-preview-header {
   height: 40px;
   display: flex;
