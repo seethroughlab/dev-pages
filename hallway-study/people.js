@@ -314,13 +314,15 @@ export class Person {
             }
           }
 
-          // Schedule BOTH visual activation AND MIDI note on next 16th note (quantized together)
+          const triggerId = trigger.id;
+          const personId = this.id;
+          const zoneId = trigger.zoneId;
+
+          // Handle MIDI-enabled vs MIDI-disabled scenarios
           if (midiManager && clockManager) {
+            // MIDI ENABLED: Schedule quantized activation with MIDI note
             const note = trigger.midiNote;
             const channel = trigger.channel;
-            const triggerId = trigger.id;
-            const personId = this.id;
-            const zoneId = trigger.zoneId;
 
             // Apply musicality: weighted probability and rest chance
             const triggerWeight = trigger.weight !== undefined ? trigger.weight : 1.0;
@@ -372,6 +374,15 @@ export class Person {
                 // Pads (Zone 2) will send NoteOff when person exits (handled above)
               }
             });
+          } else {
+            // MIDI DISABLED: Activate trigger immediately (no quantization, no MIDI notes)
+            // This ensures floor FBO visual effects still work
+            triggerZones.activateTrigger(triggerId, personId);
+
+            // Store visual parameters for shader visualization (no weight applied when MIDI disabled)
+            trigger.lastVelocity = normalizedVelocity;
+            trigger.lastXPosition = normalizedXPosition;
+            trigger.lastXDirection = this.direction;
           }
         }
 

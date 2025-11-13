@@ -393,70 +393,174 @@ peopleManager.setEnabled(true); // Will be set from cookie below
 const cameraManager = new CameraManager(scene, hallway, renderer);
 
 // ===== MIDI System =====
-const midiManager = new MIDIManager();
-midiManager.init();
+// Check if MIDI is enabled from cookie before initializing
+const savedMidiEnabledEarly = getCookie('midiEnabled');
+const midiEnabledEarly = savedMidiEnabledEarly !== null ? savedMidiEnabledEarly === 'true' : true;
 
-// ===== Clock System =====
-const clockManager = new ClockManager(120, midiManager); // 120 BPM, pass midiManager for Clock output
-
-// Note: MIDI Clock callbacks removed - we're SENDING clock to Ableton, not receiving
-
-// Set up clock callbacks for debugging
-clockManager.onSixteenthNote = (count, pos) => {
-  // This fires every 16th note (125ms at 120 BPM)
-  // Events will be triggered from here
-};
-
-clockManager.onBeat = (count, pos) => {
-  // This fires every quarter note beat
-  // console.log(`[Clock] Beat ${count} (${pos.bar}:${pos.beat})`);
-};
+// These will be created only if MIDI is enabled
+let midiManager = null;
+let clockManager = null;
+let chordManager = null;
+let keyManager = null;
 
 // Update trigger notes when auto-key/chord-change happens (after managers initialize)
 // This will be set up after GUI is ready
 let keyManagerOnBar = null;
 let chordManagerOnBar = null;
 
-// Wait for MIDI to connect, then start clock and panic
-setTimeout(() => {
-  if (midiManager.isConnected) {
-    console.log('[MIDI] Connection established');
-    console.log('[MIDI] Auto-panic on startup...');
-    midiManager.panic();
+// Function to create MIDI-related managers
+function createMIDIManagers() {
+  console.log('[MIDI] Creating MIDI managers...');
 
-    // Start clock after MIDI is ready
-    console.log('[Clock] Starting with MIDI Clock output enabled');
-    clockManager.start();
-  } else {
-    console.warn('[MIDI] Not connected - starting clock without MIDI sync');
-    clockManager.start();
+  midiManager = new MIDIManager();
+  midiManager.init();
+
+  clockManager = new ClockManager(120, midiManager);
+
+  // Set up clock callbacks
+  clockManager.onSixteenthNote = (count, pos) => {
+    // This fires every 16th note (125ms at 120 BPM)
+  };
+
+  clockManager.onBeat = (count, pos) => {
+    // This fires every quarter note beat
+  };
+
+  chordManager = new ChordManager(clockManager);
+  chordManagerOnBar = clockManager.onBar;
+
+  keyManager = new KeyManager(clockManager);
+  keyManagerOnBar = clockManager.onBar;
+
+  // Set up clock callbacks after all managers are created
+  setupClockCallbacks();
+
+  // Wait for MIDI to connect, then start clock
+  setTimeout(() => {
+    if (midiManager && midiManager.isConnected) {
+      console.log('[MIDI] Connection established');
+      console.log('[MIDI] Auto-panic on startup...');
+      midiManager.panic();
+      console.log('[Clock] Starting with MIDI Clock output enabled');
+      clockManager.start();
+    } else if (midiManager) {
+      console.warn('[MIDI] Not connected - starting clock without MIDI sync');
+      clockManager.start();
+    }
+  }, 500);
+}
+
+// Function to destroy MIDI-related managers
+function destroyMIDIManagers() {
+  console.log('[MIDI] Destroying MIDI managers...');
+
+  if (clockManager) {
+    clockManager.stop();
   }
-}, 500); // Wait 500ms for MIDI connection to establish
 
-// ===== Chord System =====
-const chordManager = new ChordManager(clockManager);
-// Store chord manager's onBar callback before it gets overwritten
-chordManagerOnBar = clockManager.onBar;
+  if (midiManager) {
+    midiManager.panic();
+    midiManager.disconnect();
+  }
 
-// ===== Key System =====
-const keyManager = new KeyManager(clockManager);
-// Store key manager's onBar callback
-keyManagerOnBar = clockManager.onBar;
+  midiManager = null;
+  clockManager = null;
+  chordManager = null;
+  keyManager = null;
+  keyManagerOnBar = null;
+  chordManagerOnBar = null;
 
-// ===== Trigger Zone System =====
-const triggerZones = new TriggerZone(hallway, keyManager, chordManager);
+  console.log('[MIDI] Managers destroyed');
+}
+
+// Create managers on startup if MIDI is enabled
+if (midiEnabledEarly) {
+  createMIDIManagers();
+} else {
+  console.log('[MIDI] MIDI disabled - managers not created');
+}
+
+// ===== Floor System =====
+// Check if Floor is enabled from cookie before initializing
+const savedFloorEnabledEarly = getCookie('floorEnabled');
+const floorEnabledEarly = savedFloorEnabledEarly !== null ? savedFloorEnabledEarly === 'true' : true;
+
+// These will be created only if Floor is enabled
+let triggerZones = null;
+let shaderFloor = null;
+
+// Function to create Floor-related systems
+function createFloorSystem() {
+  console.log('[Floor] Creating floor system...');
+
+  triggerZones = new TriggerZone(hallway, keyManager, chordManager);
+  shaderFloor = createFBOFloor(hallway, triggerZones, renderer);
+  scene.add(shaderFloor);
+
+  console.log('[Floor] Floor system created');
+}
+
+// Function to destroy Floor-related systems
+function destroyFloorSystem() {
+  console.log('[Floor] Destroying floor system...');
+
+  if (shaderFloor) {
+    scene.remove(shaderFloor);
+    // Dispose of FBO resources if needed
+    if (shaderFloor.material && shaderFloor.material.uniforms) {
+      // Clean up FBO textures
+      const uniforms = shaderFloor.material.uniforms;
+      if (uniforms.zone1FBO && uniforms.zone1FBO.value) uniforms.zone1FBO.value.dispose();
+      if (uniforms.zone2FBO && uniforms.zone2FBO.value) uniforms.zone2FBO.value.dispose();
+      if (uniforms.zone3FBO && uniforms.zone3FBO.value) uniforms.zone3FBO.value.dispose();
+    }
+    if (shaderFloor.geometry) shaderFloor.geometry.dispose();
+    if (shaderFloor.material) shaderFloor.material.dispose();
+  }
+
+  triggerZones = null;
+  shaderFloor = null;
+
+  console.log('[Floor] Floor system destroyed');
+}
+
+// Create floor system on startup if enabled
+if (floorEnabledEarly) {
+  createFloorSystem();
+} else {
+  console.log('[Floor] Floor disabled - system not created');
+}
+
+// Floor enabled state (will be set from cookie below)
+let floorEnabled = floorEnabledEarly;
 
 // ===== WebSocket Client System =====
 const wsManager = new WebSocketManager('ws://localhost:8080');
 console.log('[WebSocket] Client initialized - will attempt to connect to ws://localhost:8080');
 
-// ===== FBO Floor System =====
-const shaderFloor = createFBOFloor(hallway, triggerZones, renderer);
-scene.add(shaderFloor);
-console.log('[Floor] Shader-based floor created with 3 zone effects');
+// WebSocket Broadcasting (independent of rendering, runs in background)
+const webSocketBroadcastInterval = 33; // Broadcast every 33ms (~30Hz)
+let webSocketBroadcastTimer = null;
 
-// Floor enabled state (will be set from cookie below)
-let floorEnabled = true;
+function startWebSocketBroadcast() {
+  if (webSocketBroadcastTimer) return; // Already running
+
+  console.log('[WebSocket] Starting broadcast timer (30Hz)');
+  webSocketBroadcastTimer = setInterval(() => {
+    // Note: featureSettings is defined later, so we check wsManager directly during early init
+    if (typeof featureSettings !== 'undefined' ? featureSettings.webSocketEnabled : true) {
+      wsManager.broadcastPeople(peopleManager.people);
+    }
+  }, webSocketBroadcastInterval);
+}
+
+function stopWebSocketBroadcast() {
+  if (webSocketBroadcastTimer) {
+    console.log('[WebSocket] Stopping broadcast timer');
+    clearInterval(webSocketBroadcastTimer);
+    webSocketBroadcastTimer = null;
+  }
+}
 
 // ===== Raycast Visualization =====
 const raycastLines = new THREE.Group();
@@ -1165,8 +1269,8 @@ updateDocumentTitle();
 
 // ===== GUI PANELS =====
 
-// File Menu
-const fileFolder = gui.addFolder('File');
+// Camera Presets & Configuration
+const fileFolder = gui.addFolder('Camera Presets');
 
 // Document dropdown
 const documentDropdownSettings = { currentDocument: documentName };
@@ -1200,12 +1304,12 @@ function refreshDocumentDropdown() {
 
   // Create new controller with updated choices
   documentDropdownController = fileFolder.add(documentDropdownSettings, 'currentDocument', choices)
-    .name('Open Document')
+    .name('Camera Configuration')
     .onChange((selectedDoc) => {
       if (selectedDoc === documentName) return; // Already open
 
       if (documentDirty) {
-        const save = confirm('You have unsaved changes. Save before switching documents?');
+        const save = confirm('You have unsaved changes to camera configuration. Save before switching?');
         if (save) {
           saveDocument();
         }
@@ -1222,7 +1326,7 @@ function refreshDocumentDropdown() {
           // Try to load from localStorage
           const saved = localStorage.getItem(`hallway-study-doc:${selectedDoc}`);
           if (!saved) {
-            alert(`Document "${selectedDoc}" not found.`);
+            alert(`Camera configuration "${selectedDoc}" not found.`);
             // Reset dropdown to current document (with emoji if preset)
             const currentIsPreset = getPresetDocument(documentName) !== null;
             documentDropdownSettings.currentDocument = currentIsPreset ? `🔒 ${documentName}` : documentName;
@@ -1235,8 +1339,8 @@ function refreshDocumentDropdown() {
         deserializeDocument(data);
         refreshDocumentDropdown(); // Refresh to update current selection
       } catch (e) {
-        console.error('Failed to load document:', e);
-        alert('Failed to load document. The saved data might be corrupted.');
+        console.error('Failed to load camera configuration:', e);
+        alert('Failed to load camera configuration. The saved data might be corrupted.');
         // Reset dropdown to current document (with emoji if preset)
         const currentIsPreset = getPresetDocument(documentName) !== null;
         documentDropdownSettings.currentDocument = currentIsPreset ? `🔒 ${documentName}` : documentName;
@@ -1276,7 +1380,7 @@ function refreshDocumentDropdown() {
   setupOrbitControlsSaving();
 })();
 
-fileFolder.add({ newDoc: newDocument }, 'newDoc').name('New Document');
+fileFolder.add({ newDoc: newDocument }, 'newDoc').name('New Configuration');
 fileFolder.add({ save: saveDocument }, 'save').name('Save (Ctrl+S)');
 fileFolder.add({ saveAs: saveDocumentAs }, 'saveAs').name('Save As...');
 
@@ -1312,7 +1416,7 @@ importExportFolder.add({
           deserializeDocument(data);
           refreshDocumentDropdown(); // Refresh after import
         } catch (err) {
-          alert('Failed to import document. Invalid JSON file.');
+          alert('Failed to import camera configuration. Invalid JSON file.');
           console.error(err);
         }
       };
@@ -1322,6 +1426,9 @@ importExportFolder.add({
   }
 }, 'import').name('Import JSON');
 importExportFolder.close(); // Collapsed by default
+
+// NOTE: Cameras panel is created later in the code (around line 1918)
+// but will be moved here via DOM manipulation
 
 // Features Panel - Master enable/disable for major features
 const featuresFolder = gui.addFolder('Features');
@@ -1363,38 +1470,39 @@ const peopleController = featuresFolder.add(featureSettings, 'peopleEnabled').na
 });
 
 const midiController = featuresFolder.add(featureSettings, 'midiEnabled').name('MIDI').onChange((value) => {
-  midiManager.setEnabled(value);
   setCookie('midiEnabled', value);
   console.log(`[Settings] Saved to cookie: midiEnabled = ${value}`);
 
-  // If disabling, send panic and stop the clock
   if (!value) {
-    midiManager.enabled = true;
-    midiManager.panic();
-    midiManager.enabled = false;
-
-    // Stop the clock manager
-    if (typeof clockManager !== 'undefined') {
-      clockManager.stop();
-      console.log('[Clock] Stopped due to MIDI disabled');
-    }
+    // Destroy MIDI managers
+    destroyMIDIManagers();
   } else {
-    // If enabling, start the clock manager
-    if (typeof clockManager !== 'undefined') {
-      clockManager.start();
-      console.log('[Clock] Started due to MIDI enabled');
-    }
+    // Create MIDI managers
+    createMIDIManagers();
   }
 
   // Show/hide entire MIDI folder and related folders
   updateMIDIFoldersVisibility(value);
+
+  // Update trigger zones with new managers (if trigger zones exist)
+  if (triggerZones) {
+    triggerZones.keyManager = keyManager;
+    triggerZones.chordManager = chordManager;
+  }
 });
 
 const floorController = featuresFolder.add(featureSettings, 'floorEnabled').name('Floor').onChange((value) => {
   floorEnabled = value;
-  shaderFloor.visible = value;
   setCookie('floorEnabled', value);
   console.log(`[Settings] Saved to cookie: floorEnabled = ${value}`);
+
+  if (!value) {
+    // Destroy floor system
+    destroyFloorSystem();
+  } else {
+    // Create floor system
+    createFloorSystem();
+  }
 
   // Show/hide entire Floor folder
   if (typeof floorFolder !== 'undefined') {
@@ -1407,9 +1515,15 @@ const floorController = featuresFolder.add(featureSettings, 'floorEnabled').name
 });
 
 const webSocketController = featuresFolder.add(featureSettings, 'webSocketEnabled').name('WebSocket').onChange((value) => {
-  // WebSocket manager doesn't need enable/disable, just hide the folder
   setCookie('webSocketEnabled', value);
   console.log(`[Settings] Saved to cookie: webSocketEnabled = ${value}`);
+
+  // Start/stop WebSocket broadcasting
+  if (value) {
+    startWebSocketBroadcast();
+  } else {
+    stopWebSocketBroadcast();
+  }
 
   // Show/hide WebSocket folder
   if (typeof wsFolder !== 'undefined') {
@@ -1445,6 +1559,11 @@ setTimeout(() => {
 
 featuresFolder.open();
 
+// Start WebSocket broadcasting if enabled
+if (featureSettings.webSocketEnabled) {
+  startWebSocketBroadcast();
+}
+
 // People Simulation Panel
 const peopleFolder = gui.addFolder('People Simulation');
 
@@ -1477,15 +1596,19 @@ peopleFolder.open();
 // MIDI System Panel
 const midiFolder = gui.addFolder('MIDI Output');
 
-// Initialize MIDI manager with the state from Features panel
-midiManager.setEnabled(initialMidiEnabled);
-console.log(`[Settings] midiEnabled initialized to: ${initialMidiEnabled}`);
+// Initialize MIDI manager with the state from Features panel (if it exists)
+if (midiManager) {
+  midiManager.setEnabled(initialMidiEnabled);
+  console.log(`[Settings] midiEnabled initialized to: ${initialMidiEnabled}`);
+}
 
 const midiSettings = {
   status: 'Disconnected',
   output: 'None',
   testNote: () => {
-    midiManager.sendTestNote();
+    if (midiManager) {
+      midiManager.sendTestNote();
+    }
   }
 };
 
@@ -1497,6 +1620,12 @@ let midiOutputController = midiFolder.add(midiSettings, 'output', ['None']).name
 
 // Update output dropdown when MIDI is initialized
 function updateMIDIOutputDropdown() {
+  // Skip if MIDI manager doesn't exist
+  if (!midiManager) {
+    console.log('[MIDI] Cannot update dropdown - MIDI manager not initialized');
+    return;
+  }
+
   const outputs = midiManager.getOutputNames();
   const choices = { 'None': 'None' };
 
@@ -1509,15 +1638,10 @@ function updateMIDIOutputDropdown() {
   midiOutputController = midiFolder.add(midiSettings, 'output', choices)
     .name('MIDI Output')
     .onChange((outputId) => {
-      if (outputId !== 'None') {
+      if (outputId !== 'None' && midiManager) {
         midiManager.connectToOutput(outputId);
       }
     });
-
-  // Apply visibility based on current enabled state
-  if (!midiSettings.enabled) {
-    midiOutputController.hide();
-  }
 
   // Auto-select first output if available
   if (outputs.length > 0) {
@@ -1531,7 +1655,9 @@ setTimeout(updateMIDIOutputDropdown, 100);
 
 // Panic button
 midiSettings.panic = () => {
-  midiManager.panic();
+  if (midiManager) {
+    midiManager.panic();
+  }
 };
 const midiPanicController = midiFolder.add(midiSettings, 'panic').name('🚨 PANIC (All Notes Off)');
 
@@ -1577,10 +1703,17 @@ function updateMIDIFoldersVisibility(enabled) {
 
 // Update connection status in the GUI
 setInterval(() => {
-  const newStatus = midiManager.isConnected ? '✓ Connected' : '✗ Disconnected';
-  if (midiSettings.status !== newStatus) {
-    midiSettings.status = newStatus;
-    midiStatusController.updateDisplay();
+  if (midiManager) {
+    const newStatus = midiManager.isConnected ? '✓ Connected' : '✗ Disconnected';
+    if (midiSettings.status !== newStatus) {
+      midiSettings.status = newStatus;
+      midiStatusController.updateDisplay();
+    }
+  } else {
+    if (midiSettings.status !== 'Disabled') {
+      midiSettings.status = 'Disabled';
+      midiStatusController.updateDisplay();
+    }
   }
 }, 500);
 
@@ -1619,7 +1752,6 @@ const floorFolder = gui.addFolder('Floor Visualization');
 
 // Initialize floor state from Features panel
 floorEnabled = initialFloorEnabled;
-shaderFloor.visible = initialFloorEnabled;
 console.log(`[Settings] floorEnabled initialized to: ${initialFloorEnabled}`);
 
 // You can add floor-specific settings here in the future
@@ -1642,6 +1774,8 @@ const clockSettings = {
   position: '1:1:1',
   metronome: '○',
   startStop: () => {
+    if (!clockManager) return;
+
     if (clockManager.running) {
       clockManager.stop();
       clockSettings.running = false;
@@ -1651,17 +1785,23 @@ const clockSettings = {
     }
   },
   reset: () => {
-    clockManager.reset();
+    if (clockManager) {
+      clockManager.reset();
+    }
   }
 };
 
-// Apply loaded settings to clock manager
-clockManager.setAutoBPMEnabled(clockSettings.autoBPMChange);
-clockManager.setQuantization(clockSettings.quantization);
+// Apply loaded settings to clock manager (if it exists)
+if (clockManager) {
+  clockManager.setAutoBPMEnabled(clockSettings.autoBPMChange);
+  clockManager.setQuantization(clockSettings.quantization);
+}
 
 // Auto BPM Change toggle
 clockFolder.add(clockSettings, 'autoBPMChange').name('Auto BPM Change').onChange((value) => {
-  clockManager.setAutoBPMEnabled(value);
+  if (clockManager) {
+    clockManager.setAutoBPMEnabled(value);
+  }
   // Update BPM controller label based on auto-change state
   bpmController.name(value ? 'BPM (auto-changing)' : 'BPM');
   // Save to cookie
@@ -1674,7 +1814,7 @@ const bpmController = clockFolder.add(clockSettings, 'bpm', 60, 200, 1)
   .listen()
   .onChange((value) => {
     // Only allow manual BPM changes when auto-change is disabled
-    if (!clockSettings.autoBPMChange) {
+    if (!clockSettings.autoBPMChange && clockManager) {
       clockManager.setBPM(value);
     }
   });
@@ -1683,7 +1823,9 @@ const bpmController = clockFolder.add(clockSettings, 'bpm', 60, 200, 1)
 clockFolder.add(clockSettings, 'quantization', ['16th', '8th', 'quarter'])
   .name('Quantization')
   .onChange((value) => {
-    clockManager.setQuantization(value);
+    if (clockManager) {
+      clockManager.setQuantization(value);
+    }
     // Save to cookie
     setCookie('quantization', value);
   });
@@ -1703,6 +1845,8 @@ clockFolder.add(clockSettings, 'reset').name('⟲ Reset to 1:1:1');
 // Update clock displays in real-time
 let lastMetronomeBeat = -1;
 setInterval(() => {
+  if (!clockManager) return; // Skip if MIDI is disabled
+
   const pos = clockManager.getPosition();
   clockSettings.position = `${pos.bar}:${pos.beat}:${pos.sixteenth}`;
   positionController.updateDisplay();
@@ -1735,17 +1879,20 @@ const keySettings = {
   changeInterval: 16,
   compatibleKeys: '',
   manualChange: () => {
+    if (!keyManager) return;
     keyManager.changeToCompatibleKey();
-    triggerZones.updateMIDINotes();
+    if (triggerZones) triggerZones.updateMIDINotes();
     updateKeyDisplay();
   }
 };
 
-// Apply loaded settings to key manager
-keyManager.setAutoChangeEnabled(keySettings.autoChange);
+// Apply loaded settings to key manager (if it exists)
+if (keyManager) {
+  keyManager.setAutoChangeEnabled(keySettings.autoChange);
+}
 
 // Current key dropdown (all 24 keys)
-const allKeys = keyManager.getAllKeys();
+const allKeys = keyManager ? keyManager.getAllKeys() : [];
 const keyChoices = {};
 allKeys.forEach(k => {
   keyChoices[k.label] = k.value;
@@ -1754,21 +1901,26 @@ allKeys.forEach(k => {
 const keyController = keyFolder.add(keySettings, 'currentKey', keyChoices)
   .name('Current Key')
   .onChange((value) => {
+    if (!keyManager) return;
     keyManager.setKey(value);
-    triggerZones.updateMIDINotes();
+    if (triggerZones) triggerZones.updateMIDINotes();
     updateKeyDisplay();
   });
 
 // Auto change toggle
 keyFolder.add(keySettings, 'autoChange').name('Auto Key Change').onChange((value) => {
-  keyManager.setAutoChangeEnabled(value);
+  if (keyManager) {
+    keyManager.setAutoChangeEnabled(value);
+  }
   // Save to cookie
   setCookie('autoKeyChange', value);
 });
 
 // Change interval slider
 keyFolder.add(keySettings, 'changeInterval', 4, 32, 4).name('Change Every (bars)').onChange((value) => {
-  keyManager.setAutoChangeInterval(value);
+  if (keyManager) {
+    keyManager.setAutoChangeInterval(value);
+  }
 });
 
 // Manual change button
@@ -1779,8 +1931,8 @@ const compatibleController = keyFolder.add(keySettings, 'compatibleKeys').name('
 
 // Update key display
 function updateKeyDisplay() {
-  // Skip update if MIDI is disabled
-  if (!featureSettings.midiEnabled) return;
+  // Skip update if managers don't exist
+  if (!keyManager) return;
 
   const info = keyManager.getInfo();
   const keyInfo = keyManager.getCurrentKeyInfo();
@@ -1794,44 +1946,44 @@ function updateKeyDisplay() {
 // Update display periodically
 setInterval(updateKeyDisplay, 200);
 
-// Wrap the keyManager's and chordManager's onBar callbacks to update triggers
-// Master onBar callback that handles both key and chord changes
-clockManager.onBar = (barCount, pos) => {
-  // Skip all music updates if MIDI is disabled
-  if (!featureSettings.midiEnabled) return;
+// Function to set up clock callbacks (called when managers are created)
+function setupClockCallbacks() {
+  if (!clockManager) return;
 
-  const oldKey = keyManager.currentKey;
-  const oldChord = chordManager.getCurrentChord().name;
+  // Master onBar callback that handles both key and chord changes
+  clockManager.onBar = (barCount, pos) => {
+    if (!keyManager || !chordManager) return;
 
-  // Call chord manager's callback (handles chord changes)
-  if (chordManagerOnBar) chordManagerOnBar(barCount, pos);
+    const oldKey = keyManager.currentKey;
+    const oldChord = chordManager.getCurrentChord().name;
 
-  // Call key manager's callback (handles key changes)
-  if (keyManagerOnBar) keyManagerOnBar(barCount, pos);
+    // Call chord manager's callback (handles chord changes)
+    if (chordManagerOnBar) chordManagerOnBar(barCount, pos);
 
-  // Check if chord changed and update patterns
-  const newChord = chordManager.getCurrentChord().name;
-  if (oldChord !== newChord) {
-    triggerZones.updateChordPatterns();
-    updateChordDisplay();
-    showToast('Chord Change', `${newChord} in ${keyManager.currentKey}`, 'chord-change');
-  }
+    // Call key manager's callback (handles key changes)
+    if (keyManagerOnBar) keyManagerOnBar(barCount, pos);
 
-  // Check if key changed and update notes
-  if (oldKey !== keyManager.currentKey) {
-    triggerZones.updateMIDINotes();
-    updateKeyDisplay();
-    showToast('Key Change', keyManager.currentKey, 'key-change');
-  }
-};
+    // Check if chord changed and update patterns (only if triggerZones exist)
+    const newChord = chordManager.getCurrentChord().name;
+    if (oldChord !== newChord) {
+      if (triggerZones) triggerZones.updateChordPatterns();
+      updateChordDisplay();
+      if (midiManager) showToast('Chord Change', `${newChord} in ${keyManager.currentKey}`, 'chord-change');
+    }
 
-// BPM change callback
-clockManager.onBPMChange = (newBPM, oldBPM) => {
-  // Skip if MIDI is disabled
-  if (!featureSettings.midiEnabled) return;
+    // Check if key changed and update notes (only if triggerZones exist)
+    if (oldKey !== keyManager.currentKey) {
+      if (triggerZones) triggerZones.updateMIDINotes();
+      updateKeyDisplay();
+      if (midiManager) showToast('Key Change', keyManager.currentKey, 'key-change');
+    }
+  };
 
-  showToast('BPM Change', `${newBPM} BPM`, 'bpm-change');
-};
+  // BPM change callback
+  clockManager.onBPMChange = (newBPM) => {
+    if (midiManager) showToast('BPM Change', `${newBPM} BPM`, 'bpm-change');
+  };
+}
 
 keyFolder.open();
 
@@ -1847,38 +1999,46 @@ const chordSettings = {
   autoChange: savedAutoChordChange !== null ? savedAutoChordChange === 'true' : true,
   changeInterval: 8,
   manualNext: () => {
+    if (!chordManager) return;
     chordManager.manualNextChord();
-    triggerZones.updateChordPatterns();
+    if (triggerZones) triggerZones.updateChordPatterns();
     updateChordDisplay();
   }
 };
 
-// Apply loaded settings to chord manager
-chordManager.setAutoChangeEnabled(chordSettings.autoChange);
+// Apply loaded settings to chord manager (if it exists)
+if (chordManager) {
+  chordManager.setAutoChangeEnabled(chordSettings.autoChange);
+}
 
 // Progression with highlighted current chord (read-only)
 const progressionDisplayController = chordFolder.add(chordSettings, 'progressionDisplay').name('Progression').disable();
 
 // Progression selector
-const progressionNames = chordManager.getProgressionNames();
+const progressionNames = chordManager ? chordManager.getProgressionNames() : [];
 const progressionController = chordFolder.add(chordSettings, 'progression', progressionNames)
   .name('Progression')
   .onChange((value) => {
+    if (!chordManager) return;
     chordManager.setProgression(value);
-    triggerZones.updateChordPatterns();
+    if (triggerZones) triggerZones.updateChordPatterns();
     updateChordDisplay();
   });
 
 // Auto-change toggle
 chordFolder.add(chordSettings, 'autoChange').name('Auto Change').onChange((value) => {
-  chordManager.setAutoChangeEnabled(value);
+  if (chordManager) {
+    chordManager.setAutoChangeEnabled(value);
+  }
   // Save to cookie
   setCookie('autoChordChange', value);
 });
 
 // Change interval slider
 chordFolder.add(chordSettings, 'changeInterval', 4, 32, 4).name('Change Every (bars)').onChange((value) => {
-  chordManager.setAutoChangeInterval(value);
+  if (chordManager) {
+    chordManager.setAutoChangeInterval(value);
+  }
 });
 
 // Manual next chord button
@@ -1886,8 +2046,8 @@ chordFolder.add(chordSettings, 'manualNext').name('→ Next Chord');
 
 // Update chord display function
 function updateChordDisplay() {
-  // Skip update if MIDI is disabled
-  if (!featureSettings.midiEnabled) return;
+  // Skip update if managers don't exist
+  if (!chordManager) return;
 
   const info = chordManager.getInfo();
   chordSettings.progressionDisplay = info.progressionDisplay;
@@ -1922,14 +2082,8 @@ if (initialWebSocketEnabled) {
   wsFolder.hide();
 }
 
-// Set initial clock state based on MIDI enabled state
-if (initialMidiEnabled) {
-  clockManager.start();
-  console.log('[Clock] Started (MIDI enabled on load)');
-} else {
-  clockManager.stop();
-  console.log('[Clock] Stopped (MIDI disabled on load)');
-}
+// Initial clock state is already handled in createMIDIManagers/destroyMIDIManagers
+// No need for separate initialization here
 
 // Cameras Panel
 const camerasFolder = gui.addFolder('Cameras');
@@ -2136,7 +2290,12 @@ function deselectAllCameras() {
   activeCamera = null;
   activeCameraFolder = null;
   previewPanel.classList.remove('active');
-  transformToolbar.style.display = 'none';
+
+  // Only hide toolbar if it exists (may not be initialized yet during startup)
+  if (typeof transformToolbar !== 'undefined' && transformToolbar) {
+    transformToolbar.style.display = 'none';
+  }
+
   transformControls.detach();
 }
 
@@ -2274,18 +2433,42 @@ function addCameraToGUI(cam) {
 
 camerasFolder.open();
 
-// Reorder GUI folders: Cameras should appear directly above People Simulation
-// Move Cameras folder DOM element to appear before People Simulation
-setTimeout(() => {
-  const camerasFolderElement = camerasFolder.domElement.parentElement;
-  const peopleFolderElement = peopleFolder.domElement.parentElement;
+// Reorder GUI folders: Features first, then camera-related panels
+// Features -> Camera Presets -> Cameras -> People -> etc.
+requestAnimationFrame(() => {
+  setTimeout(() => {
+    const cameraPresetsFolderElement = fileFolder.domElement;
+    const camerasFolderElement = camerasFolder.domElement;
+    const featuresFolderElement = featuresFolder.domElement;
 
-  if (camerasFolderElement && peopleFolderElement && camerasFolderElement.parentElement) {
-    // Insert Cameras before People
-    camerasFolderElement.parentElement.insertBefore(camerasFolderElement, peopleFolderElement);
-    console.log('[GUI] Reordered: Cameras now appears directly above People Simulation');
-  }
-}, 0);
+    console.log('[GUI] Attempting reorder...');
+    console.log('[GUI] Camera Presets element:', cameraPresetsFolderElement);
+    console.log('[GUI] Cameras element:', camerasFolderElement);
+    console.log('[GUI] Features element:', featuresFolderElement);
+
+    if (cameraPresetsFolderElement && camerasFolderElement && featuresFolderElement) {
+      const parent = cameraPresetsFolderElement.parentElement;
+
+      // Move Features to the top (before Camera Presets)
+      parent.insertBefore(featuresFolderElement, cameraPresetsFolderElement);
+
+      // Insert Cameras between Camera Presets and the next element
+      // (We need to find what comes after Camera Presets now)
+      const nextAfterPresets = cameraPresetsFolderElement.nextElementSibling;
+      if (nextAfterPresets) {
+        parent.insertBefore(camerasFolderElement, nextAfterPresets);
+      }
+
+      console.log('[GUI] ✓ Reordered: Features -> Camera Presets -> Cameras');
+    } else {
+      console.error('[GUI] ✗ Could not reorder - missing elements:', {
+        cameraPresets: !!cameraPresetsFolderElement,
+        cameras: !!camerasFolderElement,
+        features: !!featuresFolderElement
+      });
+    }
+  }, 200);
+});
 
 // ===== Perspective/Orthographic Toggle =====
 const cameraModeBtn = document.getElementById('camera-mode');
@@ -2397,8 +2580,6 @@ window.addEventListener('resize', () => {
 
 // ===== Animation loop =====
 let lastTime = performance.now();
-let lastWebSocketBroadcast = 0;
-const webSocketBroadcastInterval = 33; // Broadcast every 33ms (~30Hz)
 
 function animate() {
   requestAnimationFrame(animate);
@@ -2407,25 +2588,19 @@ function animate() {
   const deltaTime = Math.min((now - lastTime) / 1000, 0.1); // Cap at 0.1s to prevent huge jumps
   lastTime = now;
 
-  // Update clock system - only if MIDI is enabled
-  if (featureSettings.midiEnabled) {
+  // Update clock system - only if MIDI is enabled and managers exist
+  if (clockManager) {
     clockManager.update(now);
   }
 
   // Update people simulation (pass all systems including MIDI and clock)
   peopleManager.update(deltaTime, cameraManager.cameras, triggerZones, clockManager, midiManager);
 
-  // Broadcast people locations via WebSocket (throttled to ~30Hz) - only if WebSocket is enabled
-  if (featureSettings.webSocketEnabled && now - lastWebSocketBroadcast >= webSocketBroadcastInterval) {
-    wsManager.broadcastPeople(peopleManager.people);
-    lastWebSocketBroadcast = now;
-  }
-
   // Update cameras (for pulsing boundary violation lines)
   cameraManager.cameras.forEach(cam => cam.update(deltaTime));
 
-  // Update FBO floor (with trigger animations) - only if enabled
-  if (floorEnabled) {
+  // Update FBO floor (with trigger animations) - only if enabled and floor exists
+  if (floorEnabled && shaderFloor) {
     updateFBOFloor(shaderFloor, deltaTime);
   }
 
