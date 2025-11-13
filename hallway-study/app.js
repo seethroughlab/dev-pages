@@ -310,6 +310,18 @@ function buildHallway() {
     hallGroup.add(line);
   });
 
+  // Solid floor plane (layer 0 - visible to cameras)
+  // This is always visible, even when Floor FBO is disabled
+  const floorGeometry = new THREE.PlaneGeometry(W, L);
+  const floorMaterial = new THREE.MeshBasicMaterial({
+    color: 0x0a0e14,  // Match background color
+    side: THREE.DoubleSide
+  });
+  const solidFloor = new THREE.Mesh(floorGeometry, floorMaterial);
+  solidFloor.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+  solidFloor.position.y = 0; // At ground level
+  hallGroup.add(solidFloor);
+
   // Grid on floor (layer 1 - hide from camera previews)
   const grid = new THREE.GridHelper(L, Math.max(6, Math.round(L)), 0x233140, 0x1a2633);
   grid.rotation.y = Math.PI / 2;
@@ -1575,9 +1587,13 @@ const savedPeopleCount = getCookie('peopleCount');
 const initialPeopleCount = savedPeopleCount !== null ? parseInt(savedPeopleCount, 10) : 3;
 console.log(`[Settings] peopleCount initialized to: ${initialPeopleCount}`);
 
+const savedLateralMovement = getCookie('lateralMovement');
+const initialLateralMovement = savedLateralMovement !== null ? savedLateralMovement === 'true' : true;
+console.log(`[Settings] lateralMovement initialized to: ${initialLateralMovement}`);
+
 const peopleSettings = {
   count: initialPeopleCount,
-  lateralMovement: true
+  lateralMovement: initialLateralMovement
 };
 
 peopleFolder.add(peopleSettings, 'count', 0, 12, 1).name('Count').onChange((value) => {
@@ -1589,6 +1605,8 @@ peopleFolder.add(peopleSettings, 'count', 0, 12, 1).name('Count').onChange((valu
 
 peopleFolder.add(peopleSettings, 'lateralMovement').name('Sideways Motion').onChange((value) => {
   peopleManager.setLateralMovement(value);
+  setCookie('lateralMovement', value);
+  console.log(`[Settings] Saved to cookie: lateralMovement = ${value}`);
 });
 
 peopleFolder.open();
@@ -1765,10 +1783,12 @@ const clockFolder = gui.addFolder('Clock & Timing');
 // Load clock settings from cookies
 const savedAutoBPM = getCookie('autoBPMChange');
 const savedQuantization = getCookie('quantization');
+const savedBPM = getCookie('bpm');
+const initialBPM = savedBPM !== null ? parseInt(savedBPM, 10) : 120;
 
 const clockSettings = {
   running: true,
-  bpm: 120,
+  bpm: initialBPM,
   autoBPMChange: savedAutoBPM !== null ? savedAutoBPM === 'true' : true,
   quantization: savedQuantization !== null ? savedQuantization : '16th',
   position: '1:1:1',
@@ -1795,6 +1815,10 @@ const clockSettings = {
 if (clockManager) {
   clockManager.setAutoBPMEnabled(clockSettings.autoBPMChange);
   clockManager.setQuantization(clockSettings.quantization);
+  // Apply saved BPM if auto-change is disabled
+  if (!clockSettings.autoBPMChange) {
+    clockManager.setBPM(clockSettings.bpm);
+  }
 }
 
 // Auto BPM Change toggle
@@ -1816,6 +1840,8 @@ const bpmController = clockFolder.add(clockSettings, 'bpm', 60, 200, 1)
     // Only allow manual BPM changes when auto-change is disabled
     if (!clockSettings.autoBPMChange && clockManager) {
       clockManager.setBPM(value);
+      setCookie('bpm', value);
+      console.log(`[Settings] Saved to cookie: bpm = ${value}`);
     }
   });
 
@@ -1872,11 +1898,13 @@ const keyFolder = gui.addFolder('Musical Key (Camelot Wheel)');
 
 // Load key settings from cookies
 const savedAutoKeyChange = getCookie('autoKeyChange');
+const savedKeyChangeInterval = getCookie('keyChangeInterval');
+const initialKeyChangeInterval = savedKeyChangeInterval !== null ? parseInt(savedKeyChangeInterval, 10) : 16;
 
 const keySettings = {
   currentKey: '8A - A minor',
   autoChange: savedAutoKeyChange !== null ? savedAutoKeyChange === 'true' : true,
-  changeInterval: 16,
+  changeInterval: initialKeyChangeInterval,
   compatibleKeys: '',
   manualChange: () => {
     if (!keyManager) return;
@@ -1889,6 +1917,7 @@ const keySettings = {
 // Apply loaded settings to key manager (if it exists)
 if (keyManager) {
   keyManager.setAutoChangeEnabled(keySettings.autoChange);
+  keyManager.setAutoChangeInterval(keySettings.changeInterval);
 }
 
 // Current key dropdown (all 24 keys)
@@ -1921,6 +1950,8 @@ keyFolder.add(keySettings, 'changeInterval', 4, 32, 4).name('Change Every (bars)
   if (keyManager) {
     keyManager.setAutoChangeInterval(value);
   }
+  setCookie('keyChangeInterval', value);
+  console.log(`[Settings] Saved to cookie: keyChangeInterval = ${value}`);
 });
 
 // Manual change button
@@ -1992,12 +2023,14 @@ const chordFolder = gui.addFolder('Chord Progression');
 
 // Load chord settings from cookies
 const savedAutoChordChange = getCookie('autoChordChange');
+const savedChordChangeInterval = getCookie('chordChangeInterval');
+const initialChordChangeInterval = savedChordChangeInterval !== null ? parseInt(savedChordChangeInterval, 10) : 8;
 
 const chordSettings = {
   progressionDisplay: 'I - V - vi - IV',
   progression: 'I-V-vi-IV',
   autoChange: savedAutoChordChange !== null ? savedAutoChordChange === 'true' : true,
-  changeInterval: 8,
+  changeInterval: initialChordChangeInterval,
   manualNext: () => {
     if (!chordManager) return;
     chordManager.manualNextChord();
@@ -2009,6 +2042,7 @@ const chordSettings = {
 // Apply loaded settings to chord manager (if it exists)
 if (chordManager) {
   chordManager.setAutoChangeEnabled(chordSettings.autoChange);
+  chordManager.setAutoChangeInterval(chordSettings.changeInterval);
 }
 
 // Progression with highlighted current chord (read-only)
@@ -2039,6 +2073,8 @@ chordFolder.add(chordSettings, 'changeInterval', 4, 32, 4).name('Change Every (b
   if (chordManager) {
     chordManager.setAutoChangeInterval(value);
   }
+  setCookie('chordChangeInterval', value);
+  console.log(`[Settings] Saved to cookie: chordChangeInterval = ${value}`);
 });
 
 // Manual next chord button
@@ -2105,6 +2141,25 @@ camerasFolder.add(cameraModelSettings, 'model', ['OAK-D Pro PoE', 'OAK-D Pro W P
         updateCameraSpecsDisplay(cam);
       }
     });
+
+    // Turn on "Show Camera Frustums" when model changes
+    transformSettings.showFrustums = true;
+    showFrustumsController.updateDisplay();
+
+    // Apply frustum visibility to all cameras
+    cameraManager.cameras.forEach(cam => {
+      if (cam.frustumHelper) {
+        cam.frustumHelper.visible = true;
+      }
+      if (cam.frustumMesh) {
+        cam.frustumMesh.visible = true;
+      }
+    });
+
+    // Save to cookie
+    setCookie('showFrustums', true);
+    console.log('[Settings] Camera model changed - enabled Show Camera Frustums');
+
     markDocumentDirty();
   });
 
@@ -2147,7 +2202,7 @@ const transformSettings = {
 console.log(`[Settings] Show Frustums initialized to: ${transformSettings.showFrustums}`);
 console.log(`[Settings] Show Raycasts initialized to: ${transformSettings.showRaycasts}`);
 
-camerasFolder.add(transformSettings, 'showFrustums')
+const showFrustumsController = camerasFolder.add(transformSettings, 'showFrustums')
   .name('Show Camera Frustums')
   .onChange((value) => {
     console.log(`[Settings] Show Frustums changed to: ${value}`);
