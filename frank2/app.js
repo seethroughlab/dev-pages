@@ -1490,11 +1490,46 @@ function stopVisualization() {
     if (animationId) {
         cancelAnimationFrame(animationId);
         animationId = null;
-        
+
         // Clear canvas
         if (fftCtx) {
             fftCtx.fillStyle = '#2a2a2a';
             fftCtx.fillRect(0, 0, fftCanvas.width, fftCanvas.height);
         }
     }
+}
+
+// Info Modal functionality
+const infoIcon = document.getElementById('infoIcon');
+const infoModal = document.getElementById('infoModal');
+const modalClose = document.getElementById('modalClose');
+
+if (infoIcon && infoModal && modalClose) {
+    // Open modal when info icon is clicked
+    infoIcon.addEventListener('click', () => {
+        infoModal.classList.add('active');
+        logDebug('Info modal opened');
+    });
+
+    // Close modal when X is clicked
+    modalClose.addEventListener('click', () => {
+        infoModal.classList.remove('active');
+        logDebug('Info modal closed');
+    });
+
+    // Close modal when clicking outside the modal content
+    infoModal.addEventListener('click', (e) => {
+        if (e.target === infoModal) {
+            infoModal.classList.remove('active');
+            logDebug('Info modal closed (clicked outside)');
+        }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && infoModal.classList.contains('active')) {
+            infoModal.classList.remove('active');
+            logDebug('Info modal closed (Escape key)');
+        }
+    });
 }

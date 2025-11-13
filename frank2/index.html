@@ -8,6 +8,13 @@
 </head>
 <body>
     <div class="container">
+        <div class="info-icon" id="infoIcon" title="How shows are generated">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+        </div>
         <h1>Joe Frank Player</h1>
         
         <div class="episode-selector">
@@ -73,6 +80,142 @@
         </div>
     </div>
     
+    <!-- Info Modal -->
+    <div class="modal" id="infoModal">
+        <div class="modal-content">
+            <span class="modal-close" id="modalClose">&times;</span>
+            <h2>How Shows Are Generated</h2>
+
+            <div class="modal-section">
+                <h3>Three-Stage Pipeline</h3>
+                <p>Each episode is created through an automated three-stage process:</p>
+
+                <div class="pipeline-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>Script Generation</h4>
+                        <p>Using <strong>OpenAI GPT-4o</strong>, the system generates:</p>
+                        <ul>
+                            <li>Episode outline and narrative structure</li>
+                            <li>5-6 story segments (800-1000 words each)</li>
+                            <li>Unique voice assignments per segment</li>
+                            <li>Text optimized for text-to-speech</li>
+                        </ul>
+                        <p class="tech-note">Output: YAML file with structured episode data</p>
+                    </div>
+                </div>
+
+                <div class="pipeline-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Voice Narration</h4>
+                        <p>Using <strong>Bark TTS</strong> (Suno AI), the system:</p>
+                        <ul>
+                            <li>Converts script text to natural speech</li>
+                            <li>Applies different voice presets per segment</li>
+                            <li>Adds optional telephone/broadcast effects</li>
+                            <li>Normalizes audio to prevent clipping</li>
+                        </ul>
+                        <p class="tech-note">Output: Individual WAV files (24kHz, 16-bit)</p>
+                    </div>
+                </div>
+
+                <div class="pipeline-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Music Generation</h4>
+                        <p>Using <strong>Facebook MusicGen</strong>, the system:</p>
+                        <ul>
+                            <li>Generates atmospheric background loops</li>
+                            <li>Uses curated prompts (jazz, ambient, trip-hop)</li>
+                            <li>Evaluates quality with dynamic scoring (0-10)</li>
+                            <li>Regenerates clips that score below 3.0</li>
+                        </ul>
+                        <p class="tech-note">Output: Background music loops with spectral analysis</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-section">
+                <h3>Key Technologies</h3>
+                <div class="tech-grid">
+                    <div class="tech-item">
+                        <strong>GPT-4o</strong>
+                        <span>Script generation & storytelling</span>
+                    </div>
+                    <div class="tech-item">
+                        <strong>Bark TTS</strong>
+                        <span>Natural voice synthesis</span>
+                    </div>
+                    <div class="tech-item">
+                        <strong>MusicGen</strong>
+                        <span>AI music composition</span>
+                    </div>
+                    <div class="tech-item">
+                        <strong>PyTorch</strong>
+                        <span>Deep learning framework</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-section">
+                <h3>Generation Time</h3>
+                <p>A complete episode typically takes:</p>
+                <ul>
+                    <li><strong>Script:</strong> 5-10 minutes</li>
+                    <li><strong>Voice:</strong> 10-30 minutes (GPU-accelerated)</li>
+                    <li><strong>Music:</strong> 30-120 minutes (8 quality-checked loops)</li>
+                </ul>
+                <p class="total-time"><strong>Total:</strong> ~1-2.5 hours per episode</p>
+            </div>
+
+            <div class="modal-section">
+                <h3>Playback System</h3>
+                <p>The player uses a sophisticated real-time mixing system built with Tone.js:</p>
+
+                <div class="playback-feature">
+                    <h4>🎵 Intelligent Music Looping</h4>
+                    <ul>
+                        <li>Each music loop plays 5-10 times before transitioning</li>
+                        <li>5-10 second pause between music changes</li>
+                        <li>Smooth fade-in (6s) and fade-out (10s) transitions</li>
+                        <li>Random loop selection to avoid repetition</li>
+                    </ul>
+                </div>
+
+                <div class="playback-feature">
+                    <h4>🎙️ Story Narration</h4>
+                    <ul>
+                        <li>Random story selection without repeats</li>
+                        <li>30-60 second pauses between story segments</li>
+                        <li>75% chance of telephone effect per segment</li>
+                        <li>NPR broadcast-style audio processing chain</li>
+                    </ul>
+                </div>
+
+                <div class="playback-feature">
+                    <h4>🔊 Audio Processing</h4>
+                    <ul>
+                        <li><strong>Music Ducking:</strong> Automatically reduces music to 50% volume during narration</li>
+                        <li><strong>Broadcast Chain:</strong> High-pass filter → Gate → Compressor → EQ → Room reverb</li>
+                        <li><strong>Telephone Effect:</strong> Bandpass filter (1700Hz) + distortion for vintage sound</li>
+                        <li><strong>Master Processing:</strong> Compression + limiting to prevent clipping</li>
+                    </ul>
+                </div>
+
+                <div class="playback-feature">
+                    <h4>⏱️ Episode Management</h4>
+                    <ul>
+                        <li>30-minute episodes with auto-advance to next episode</li>
+                        <li>Real-time progress tracking and visualization</li>
+                        <li>FFT spectrum analyzer for visual feedback</li>
+                        <li>Volume settings saved in browser cookies</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
     <script src="app.js"></script>
