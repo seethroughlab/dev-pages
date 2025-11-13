@@ -547,31 +547,81 @@ if (floorEnabledEarly) {
 let floorEnabled = floorEnabledEarly;
 
 // ===== WebSocket Client System =====
-const wsManager = new WebSocketManager('ws://localhost:8080');
-console.log('[WebSocket] Client initialized - will attempt to connect to ws://localhost:8080');
+// Using Web Worker to avoid browser throttling of background tabs
+const wsBroadcastWorker = new Worker('websocket-broadcast-worker.js');
 
-// WebSocket Broadcasting (independent of rendering, runs in background)
-const webSocketBroadcastInterval = 33; // Broadcast every 33ms (~30Hz)
-let webSocketBroadcastTimer = null;
+// Initialize the worker
+wsBroadcastWorker.postMessage({
+  type: 'init',
+  data: {
+    url: 'ws://localhost:8080',
+    enabled: true
+  }
+});
+
+// Listen for worker messages
+wsBroadcastWorker.onmessage = (e) => {
+  const { type, data } = e.data;
+
+  if (type === 'connected') {
+    console.log('[Worker WS] WebSocket connected');
+  } else if (type === 'disconnected') {
+    console.log('[Worker WS] WebSocket disconnected');
+  } else if (type === 'message') {
+    console.log('[Worker WS] Received:', data);
+  }
+};
+
+wsBroadcastWorker.onerror = (error) => {
+  console.error('[Worker WS] Error:', error);
+};
+
+console.log('[WebSocket] Worker initialized - broadcasting at 30Hz');
+
+// Keep wsManager for backward compatibility (if used elsewhere)
+const wsManager = new WebSocketManager('ws://localhost:8080');
+
+// Helper function to serialize person (moved from WebSocketManager)
+function serializePerson(person) {
+  const width = person.radius * 2;
+  const height = person.height;
+  const xvel = person.xVelocity || 0;
+  const yvel = person.isDwelling ? 0 : (person.speed * person.direction);
+  const x = person.xOffset;
+  const y = person.z;
+
+  return {
+    id: person.id,
+    x: parseFloat(x.toFixed(4)),
+    y: parseFloat(y.toFixed(4)),
+    w: parseFloat(width.toFixed(4)),
+    h: parseFloat(height.toFixed(4)),
+    xvel: parseFloat(xvel.toFixed(4)),
+    yvel: parseFloat(yvel.toFixed(4))
+  };
+}
+
+// Send people data to worker (called from simulation update)
+function sendPeopleToWorker(people) {
+  if (people.length === 0) return;
+
+  const serializedPeople = people.map(person => serializePerson(person));
+  wsBroadcastWorker.postMessage({
+    type: 'updatePeople',
+    data: serializedPeople
+  });
+}
 
 function startWebSocketBroadcast() {
-  if (webSocketBroadcastTimer) return; // Already running
-
-  console.log('[WebSocket] Starting broadcast timer (30Hz)');
-  webSocketBroadcastTimer = setInterval(() => {
-    // Note: featureSettings is defined later, so we check wsManager directly during early init
-    if (typeof featureSettings !== 'undefined' ? featureSettings.webSocketEnabled : true) {
-      wsManager.broadcastPeople(peopleManager.people);
-    }
-  }, webSocketBroadcastInterval);
+  // Worker is always running, just enable it
+  wsBroadcastWorker.postMessage({ type: 'setEnabled', data: true });
+  console.log('[WebSocket] Broadcast enabled');
 }
 
 function stopWebSocketBroadcast() {
-  if (webSocketBroadcastTimer) {
-    console.log('[WebSocket] Stopping broadcast timer');
-    clearInterval(webSocketBroadcastTimer);
-    webSocketBroadcastTimer = null;
-  }
+  // Disable worker broadcasting
+  wsBroadcastWorker.postMessage({ type: 'setEnabled', data: false });
+  console.log('[WebSocket] Broadcast disabled');
 }
 
 // ===== Raycast Visualization =====
@@ -2634,15 +2684,39 @@ window.addEventListener('resize', () => {
 });
 
 // ===== Animation loop =====
-let lastTime = performance.now();
+// Simulation update loop - triggered by Web Worker at 30Hz
+// Using Web Worker to avoid browser throttling of background tabs
 
-function animate() {
-  requestAnimationFrame(animate);
+// Create Web Worker for reliable 30Hz timing
+const simulationWorker = new Worker('simulation-timer-worker.js');
 
-  const now = performance.now();
-  const deltaTime = Math.min((now - lastTime) / 1000, 0.1); // Cap at 0.1s to prevent huge jumps
-  lastTime = now;
+// Track simulation updates
+let simUpdateCount = 0;
+let lastSimUpdateLog = Date.now();
 
+// Listen for tick messages from worker
+simulationWorker.onmessage = (e) => {
+  if (e.data.type === 'tick') {
+    simUpdateCount++;
+
+    // Log every second
+    if (Date.now() - lastSimUpdateLog > 1000) {
+      console.log(`[Main] Simulation update rate: ${simUpdateCount} updates/sec`);
+      simUpdateCount = 0;
+      lastSimUpdateLog = Date.now();
+    }
+
+    updateSimulation(e.data.deltaTime, e.data.timestamp);
+  }
+};
+
+simulationWorker.onerror = (error) => {
+  console.error('[Worker Sim] Simulation timer worker error:', error);
+};
+
+console.log('[Worker Sim] Simulation timer worker initialized');
+
+function updateSimulation(deltaTime, now) {
   // Update clock system - only if MIDI is enabled and managers exist
   if (clockManager) {
     clockManager.update(now);
@@ -2658,6 +2732,14 @@ function animate() {
   if (floorEnabled && shaderFloor) {
     updateFBOFloor(shaderFloor, deltaTime);
   }
+
+  // Send updated people data to WebSocket worker for broadcasting
+  sendPeopleToWorker(peopleManager.people);
+}
+
+// Render loop - handles visual updates only (simulation runs separately from worker)
+function animate() {
+  requestAnimationFrame(animate);
 
   // Update raycast visualization
   updateRaycastVisualization(raycastLines);
