@@ -12,6 +12,7 @@ import { ClockManager } from './clock-manager.js';
 import { TriggerZone } from './trigger-zones.js';
 import { KeyManager } from './key-manager.js';
 import { ChordManager } from './chord-manager.js';
+import { WebSocketManager } from './websocket-manager.js';
 
 // ===== Hallway dimensions (in meters) =====
 const hallway = {
@@ -386,7 +387,7 @@ buildHallway();
 // ===== People Simulation =====
 const peopleManager = new PeopleManager(scene, hallway);
 peopleManager.setCount(3); // Start with 3 people
-peopleManager.setEnabled(true);
+peopleManager.setEnabled(true); // Will be set from cookie below
 
 // ===== Camera System =====
 const cameraManager = new CameraManager(scene, hallway, renderer);
@@ -445,10 +446,17 @@ keyManagerOnBar = clockManager.onBar;
 // ===== Trigger Zone System =====
 const triggerZones = new TriggerZone(hallway, keyManager, chordManager);
 
+// ===== WebSocket Client System =====
+const wsManager = new WebSocketManager('ws://localhost:8080');
+console.log('[WebSocket] Client initialized - will attempt to connect to ws://localhost:8080');
+
 // ===== FBO Floor System =====
 const shaderFloor = createFBOFloor(hallway, triggerZones, renderer);
 scene.add(shaderFloor);
 console.log('[Floor] Shader-based floor created with 3 zone effects');
+
+// Floor enabled state (will be set from cookie below)
+let floorEnabled = true;
 
 // ===== Raycast Visualization =====
 const raycastLines = new THREE.Group();
@@ -480,113 +488,11 @@ togglePreviewsBtn.addEventListener('click', () => {
   } else {
     multiPreviewPanel.classList.remove('collapsed');
   }
-
-  // Update floor panel position based on camera panel state
-  updateFloorPanelPosition();
 });
 
 // Start collapsed
 multiPreviewPanel.classList.add('collapsed');
 previewsPanelCollapsed = true;
-
-// ===== Floor FBO Preview Setup =====
-const floorPreviewPanel = document.getElementById('floor-preview-panel');
-const toggleFloorPreviewBtn = document.getElementById('toggle-floor-preview');
-const floorPreviewCanvas = document.getElementById('floor-preview-canvas');
-
-// Set up WebGL renderer for floor preview
-// Use fixed reasonable dimensions for now (aspect ratio doesn't need to be exact for debugging)
-const floorPreviewWidth = 800;
-const floorPreviewHeight = 600; // Fixed height for testing
-console.log('[Floor Preview] Using fixed dimensions - width:', floorPreviewWidth, 'height:', floorPreviewHeight);
-
-// IMPORTANT: The canvas may have gotten a 2D context earlier, which blocks WebGL
-// Hard refresh (Cmd+Shift+R / Ctrl+Shift+R) if you see black
-console.log('[Floor Preview] ===== CODE VERSION: 2025-01-12-TIMESTAMP-12345 ===== LATEST CODE RUNNING =====');
-console.log('[Floor Preview] Canvas element:', floorPreviewCanvas);
-console.log('[Floor Preview] Canvas clientWidth:', floorPreviewCanvas.clientWidth, 'clientHeight:', floorPreviewCanvas.clientHeight);
-console.log('[Floor Preview] Canvas width:', floorPreviewCanvas.width, 'height:', floorPreviewCanvas.height);
-console.log('[Floor Preview] Canvas offsetWidth:', floorPreviewCanvas.offsetWidth, 'offsetHeight:', floorPreviewCanvas.offsetHeight);
-
-console.log('[Floor Preview] Creating WebGL renderer');
-const floorPreviewRenderer = new THREE.WebGLRenderer({
-  canvas: floorPreviewCanvas,
-  antialias: true,
-  alpha: false
-});
-console.log('[Floor Preview] WebGL context:', floorPreviewRenderer.getContext());
-floorPreviewRenderer.setSize(floorPreviewWidth, floorPreviewHeight);
-floorPreviewRenderer.setClearColor(0xff0000); // Bright red to test if rendering works
-console.log('[Floor Preview] Renderer created, clear color set to RED (0xff0000)');
-console.log('[Floor Preview] After setSize - Canvas width:', floorPreviewCanvas.width, 'height:', floorPreviewCanvas.height);
-
-// Create scene with just the floor for top-down view
-const floorPreviewScene = new THREE.Scene();
-// Simple orthographic camera that fills the viewport
-const floorPreviewCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
-floorPreviewCamera.position.set(0, 0, 1);
-floorPreviewCamera.lookAt(0, 0, 0);
-floorPreviewCamera.updateProjectionMatrix();
-
-let floorPreviewReady = false;
-let floorPreviewStylesLogged = false;
-
-function setupFloorPreviewTextures() {
-  console.log('[Floor Preview] Setup called');
-
-  // First add a test mesh to verify rendering works - simple 2x2 plane at z=0
-  const testGeometry = new THREE.PlaneGeometry(2, 2);
-  const testMaterial = new THREE.MeshBasicMaterial({
-    color: 0xff0000,
-    side: THREE.DoubleSide
-  });
-  const testMesh = new THREE.Mesh(testGeometry, testMaterial);
-  testMesh.position.set(0, 0, 0);
-  floorPreviewScene.add(testMesh);
-
-  console.log('[Floor Preview] Added test red plane at origin');
-
-  if (shaderFloor) {
-    // After 2 seconds, replace with the actual floor material
-    setTimeout(() => {
-      testMesh.material = shaderFloor.material;
-      console.log('[Floor Preview] Switched to floor material');
-    }, 2000);
-
-    floorPreviewReady = true;
-  } else {
-    console.error('[Floor Preview] shaderFloor not ready');
-  }
-}
-
-// Collapse/expand functionality for floor preview
-let floorPreviewPanelCollapsed = true;
-toggleFloorPreviewBtn.addEventListener('click', () => {
-  floorPreviewPanelCollapsed = !floorPreviewPanelCollapsed;
-  if (floorPreviewPanelCollapsed) {
-    floorPreviewPanel.classList.add('collapsed');
-  } else {
-    floorPreviewPanel.classList.remove('collapsed');
-  }
-});
-
-// Start collapsed
-floorPreviewPanel.classList.add('collapsed');
-
-// Function to update floor panel position based on camera panel state
-function updateFloorPanelPosition() {
-  if (previewsPanelCollapsed) {
-    floorPreviewPanel.classList.add('camera-panel-collapsed');
-  } else {
-    floorPreviewPanel.classList.remove('camera-panel-collapsed');
-  }
-}
-
-// Initialize floor panel position
-updateFloorPanelPosition();
-
-// Initialize floor preview textures (link to FBO outputs)
-setupFloorPreviewTextures();
 
 // ===== Depth Visualization Setup =====
 // Depth visualization mode toggle (false = RGB, true = depth)
@@ -1417,8 +1323,133 @@ importExportFolder.add({
 }, 'import').name('Import JSON');
 importExportFolder.close(); // Collapsed by default
 
+// Features Panel - Master enable/disable for major features
+const featuresFolder = gui.addFolder('Features');
+
+// Load feature states from cookies
+const savedPeopleEnabled = getCookie('peopleEnabled');
+const initialPeopleEnabled = savedPeopleEnabled !== null ? savedPeopleEnabled === 'true' : true;
+
+const savedMidiEnabled = getCookie('midiEnabled');
+const initialMidiEnabled = savedMidiEnabled !== null ? savedMidiEnabled === 'true' : true;
+
+const savedFloorEnabled = getCookie('floorEnabled');
+const initialFloorEnabled = savedFloorEnabled !== null ? savedFloorEnabled === 'true' : true;
+
+const savedWebSocketEnabled = getCookie('webSocketEnabled');
+const initialWebSocketEnabled = savedWebSocketEnabled !== null ? savedWebSocketEnabled === 'true' : true;
+
+const featureSettings = {
+  peopleEnabled: initialPeopleEnabled,
+  midiEnabled: initialMidiEnabled,
+  floorEnabled: initialFloorEnabled,
+  webSocketEnabled: initialWebSocketEnabled
+};
+
+// Style the feature checkboxes in a 2x2 grid
+const peopleController = featuresFolder.add(featureSettings, 'peopleEnabled').name('People').onChange((value) => {
+  peopleManager.setEnabled(value);
+  setCookie('peopleEnabled', value);
+  console.log(`[Settings] Saved to cookie: peopleEnabled = ${value}`);
+
+  // Show/hide People Simulation folder
+  if (typeof peopleFolder !== 'undefined') {
+    if (value) {
+      peopleFolder.show();
+    } else {
+      peopleFolder.hide();
+    }
+  }
+});
+
+const midiController = featuresFolder.add(featureSettings, 'midiEnabled').name('MIDI').onChange((value) => {
+  midiManager.setEnabled(value);
+  setCookie('midiEnabled', value);
+  console.log(`[Settings] Saved to cookie: midiEnabled = ${value}`);
+
+  // If disabling, send panic and stop the clock
+  if (!value) {
+    midiManager.enabled = true;
+    midiManager.panic();
+    midiManager.enabled = false;
+
+    // Stop the clock manager
+    if (typeof clockManager !== 'undefined') {
+      clockManager.stop();
+      console.log('[Clock] Stopped due to MIDI disabled');
+    }
+  } else {
+    // If enabling, start the clock manager
+    if (typeof clockManager !== 'undefined') {
+      clockManager.start();
+      console.log('[Clock] Started due to MIDI enabled');
+    }
+  }
+
+  // Show/hide entire MIDI folder and related folders
+  updateMIDIFoldersVisibility(value);
+});
+
+const floorController = featuresFolder.add(featureSettings, 'floorEnabled').name('Floor').onChange((value) => {
+  floorEnabled = value;
+  shaderFloor.visible = value;
+  setCookie('floorEnabled', value);
+  console.log(`[Settings] Saved to cookie: floorEnabled = ${value}`);
+
+  // Show/hide entire Floor folder
+  if (typeof floorFolder !== 'undefined') {
+    if (value) {
+      floorFolder.show();
+    } else {
+      floorFolder.hide();
+    }
+  }
+});
+
+const webSocketController = featuresFolder.add(featureSettings, 'webSocketEnabled').name('WebSocket').onChange((value) => {
+  // WebSocket manager doesn't need enable/disable, just hide the folder
+  setCookie('webSocketEnabled', value);
+  console.log(`[Settings] Saved to cookie: webSocketEnabled = ${value}`);
+
+  // Show/hide WebSocket folder
+  if (typeof wsFolder !== 'undefined') {
+    if (value) {
+      wsFolder.show();
+    } else {
+      wsFolder.hide();
+    }
+  }
+});
+
+// Apply grid layout to feature controllers (2x2 grid)
+const featureControllers = [peopleController, midiController, floorController, webSocketController];
+
+// Wait for DOM to be ready, then apply grid styling
+setTimeout(() => {
+  const featuresFolderElement = featuresFolder.domElement.querySelector('.children');
+  if (featuresFolderElement) {
+    // Apply CSS Grid to the container
+    featuresFolderElement.style.display = 'grid';
+    featuresFolderElement.style.gridTemplateColumns = '1fr 1fr';
+    featuresFolderElement.style.gap = '0';
+  }
+
+  // Reset any individual styling
+  featureControllers.forEach((controller) => {
+    const element = controller.domElement.parentElement;
+    element.style.display = '';
+    element.style.width = '';
+    element.style.float = '';
+  });
+}, 0);
+
+featuresFolder.open();
+
 // People Simulation Panel
 const peopleFolder = gui.addFolder('People Simulation');
+
+// Initialize people enabled state from Features panel
+peopleManager.setEnabled(initialPeopleEnabled);
 
 // Load people count from cookie (defaults to 3)
 const savedPeopleCount = getCookie('peopleCount');
@@ -1445,6 +1476,11 @@ peopleFolder.open();
 
 // MIDI System Panel
 const midiFolder = gui.addFolder('MIDI Output');
+
+// Initialize MIDI manager with the state from Features panel
+midiManager.setEnabled(initialMidiEnabled);
+console.log(`[Settings] midiEnabled initialized to: ${initialMidiEnabled}`);
+
 const midiSettings = {
   status: 'Disconnected',
   output: 'None',
@@ -1457,7 +1493,7 @@ const midiSettings = {
 const midiStatusController = midiFolder.add(midiSettings, 'status').name('Status').disable();
 
 // Output selector dropdown
-const midiOutputController = midiFolder.add(midiSettings, 'output', ['None']).name('MIDI Output');
+let midiOutputController = midiFolder.add(midiSettings, 'output', ['None']).name('MIDI Output');
 
 // Update output dropdown when MIDI is initialized
 function updateMIDIOutputDropdown() {
@@ -1470,7 +1506,7 @@ function updateMIDIOutputDropdown() {
 
   // Rebuild controller with new choices
   midiOutputController.destroy();
-  const newController = midiFolder.add(midiSettings, 'output', choices)
+  midiOutputController = midiFolder.add(midiSettings, 'output', choices)
     .name('MIDI Output')
     .onChange((outputId) => {
       if (outputId !== 'None') {
@@ -1478,10 +1514,15 @@ function updateMIDIOutputDropdown() {
       }
     });
 
+  // Apply visibility based on current enabled state
+  if (!midiSettings.enabled) {
+    midiOutputController.hide();
+  }
+
   // Auto-select first output if available
   if (outputs.length > 0) {
     midiSettings.output = outputs[0].id;
-    newController.updateDisplay();
+    midiOutputController.updateDisplay();
   }
 }
 
@@ -1492,7 +1533,47 @@ setTimeout(updateMIDIOutputDropdown, 100);
 midiSettings.panic = () => {
   midiManager.panic();
 };
-midiFolder.add(midiSettings, 'panic').name('🚨 PANIC (All Notes Off)');
+const midiPanicController = midiFolder.add(midiSettings, 'panic').name('🚨 PANIC (All Notes Off)');
+
+// Function to show/hide MIDI-related folders (MIDI Output, Clock, Key, Chord)
+// Will be called after those folders are created
+function updateMIDIFoldersVisibility(enabled) {
+  // Hide/show the entire MIDI Output folder
+  if (typeof midiFolder !== 'undefined') {
+    if (enabled) {
+      midiFolder.show();
+    } else {
+      midiFolder.hide();
+    }
+  }
+
+  // Hide/show Clock & Timing folder
+  if (typeof clockFolder !== 'undefined') {
+    if (enabled) {
+      clockFolder.show();
+    } else {
+      clockFolder.hide();
+    }
+  }
+
+  // Hide/show Musical Key folder
+  if (typeof keyFolder !== 'undefined') {
+    if (enabled) {
+      keyFolder.show();
+    } else {
+      keyFolder.hide();
+    }
+  }
+
+  // Hide/show Chord Progression folder
+  if (typeof chordFolder !== 'undefined') {
+    if (enabled) {
+      chordFolder.show();
+    } else {
+      chordFolder.hide();
+    }
+  }
+}
 
 // Update connection status in the GUI
 setInterval(() => {
@@ -1504,6 +1585,47 @@ setInterval(() => {
 }, 500);
 
 midiFolder.open();
+
+// WebSocket Panel
+const wsFolder = gui.addFolder('WebSocket Output');
+const wsSettings = {
+  status: 'Disconnected',
+  url: 'ws://localhost:8080',
+  broadcastRate: '~30 Hz'
+};
+
+// Status display (read-only)
+const wsStatusController = wsFolder.add(wsSettings, 'status').name('Status').disable();
+
+// URL display (read-only)
+wsFolder.add(wsSettings, 'url').name('Server URL').disable();
+
+// Broadcast rate display (read-only)
+wsFolder.add(wsSettings, 'broadcastRate').name('Broadcast Rate').disable();
+
+// Update connection status in the GUI
+setInterval(() => {
+  const newStatus = wsManager.isConnected() ? '✓ Connected' : '○ Connecting...';
+  if (wsSettings.status !== newStatus) {
+    wsSettings.status = newStatus;
+    wsStatusController.updateDisplay();
+  }
+}, 500);
+
+wsFolder.open();
+
+// Floor FBO Panel
+const floorFolder = gui.addFolder('Floor Visualization');
+
+// Initialize floor state from Features panel
+floorEnabled = initialFloorEnabled;
+shaderFloor.visible = initialFloorEnabled;
+console.log(`[Settings] floorEnabled initialized to: ${initialFloorEnabled}`);
+
+// You can add floor-specific settings here in the future
+// (currently the floor doesn't have any additional settings)
+
+floorFolder.open();
 
 // Clock/Timing Panel
 const clockFolder = gui.addFolder('Clock & Timing');
@@ -1657,6 +1779,9 @@ const compatibleController = keyFolder.add(keySettings, 'compatibleKeys').name('
 
 // Update key display
 function updateKeyDisplay() {
+  // Skip update if MIDI is disabled
+  if (!featureSettings.midiEnabled) return;
+
   const info = keyManager.getInfo();
   const keyInfo = keyManager.getCurrentKeyInfo();
   keySettings.currentKey = `${info.currentKey} - ${keyInfo.name}`;
@@ -1672,6 +1797,9 @@ setInterval(updateKeyDisplay, 200);
 // Wrap the keyManager's and chordManager's onBar callbacks to update triggers
 // Master onBar callback that handles both key and chord changes
 clockManager.onBar = (barCount, pos) => {
+  // Skip all music updates if MIDI is disabled
+  if (!featureSettings.midiEnabled) return;
+
   const oldKey = keyManager.currentKey;
   const oldChord = chordManager.getCurrentChord().name;
 
@@ -1699,6 +1827,9 @@ clockManager.onBar = (barCount, pos) => {
 
 // BPM change callback
 clockManager.onBPMChange = (newBPM, oldBPM) => {
+  // Skip if MIDI is disabled
+  if (!featureSettings.midiEnabled) return;
+
   showToast('BPM Change', `${newBPM} BPM`, 'bpm-change');
 };
 
@@ -1755,6 +1886,9 @@ chordFolder.add(chordSettings, 'manualNext').name('→ Next Chord');
 
 // Update chord display function
 function updateChordDisplay() {
+  // Skip update if MIDI is disabled
+  if (!featureSettings.midiEnabled) return;
+
   const info = chordManager.getInfo();
   chordSettings.progressionDisplay = info.progressionDisplay;
   chordSettings.progression = info.progression;
@@ -1766,6 +1900,36 @@ function updateChordDisplay() {
 setInterval(updateChordDisplay, 200);
 
 chordFolder.open();
+
+// Set initial visibility of all feature folders based on cookies
+updateMIDIFoldersVisibility(initialMidiEnabled);
+
+if (initialFloorEnabled) {
+  floorFolder.show();
+} else {
+  floorFolder.hide();
+}
+
+if (initialPeopleEnabled) {
+  peopleFolder.show();
+} else {
+  peopleFolder.hide();
+}
+
+if (initialWebSocketEnabled) {
+  wsFolder.show();
+} else {
+  wsFolder.hide();
+}
+
+// Set initial clock state based on MIDI enabled state
+if (initialMidiEnabled) {
+  clockManager.start();
+  console.log('[Clock] Started (MIDI enabled on load)');
+} else {
+  clockManager.stop();
+  console.log('[Clock] Stopped (MIDI disabled on load)');
+}
 
 // Cameras Panel
 const camerasFolder = gui.addFolder('Cameras');
@@ -2110,6 +2274,19 @@ function addCameraToGUI(cam) {
 
 camerasFolder.open();
 
+// Reorder GUI folders: Cameras should appear directly above People Simulation
+// Move Cameras folder DOM element to appear before People Simulation
+setTimeout(() => {
+  const camerasFolderElement = camerasFolder.domElement.parentElement;
+  const peopleFolderElement = peopleFolder.domElement.parentElement;
+
+  if (camerasFolderElement && peopleFolderElement && camerasFolderElement.parentElement) {
+    // Insert Cameras before People
+    camerasFolderElement.parentElement.insertBefore(camerasFolderElement, peopleFolderElement);
+    console.log('[GUI] Reordered: Cameras now appears directly above People Simulation');
+  }
+}, 0);
+
 // ===== Perspective/Orthographic Toggle =====
 const cameraModeBtn = document.getElementById('camera-mode');
 const viewLabel = document.getElementById('view-label');
@@ -2220,6 +2397,8 @@ window.addEventListener('resize', () => {
 
 // ===== Animation loop =====
 let lastTime = performance.now();
+let lastWebSocketBroadcast = 0;
+const webSocketBroadcastInterval = 33; // Broadcast every 33ms (~30Hz)
 
 function animate() {
   requestAnimationFrame(animate);
@@ -2228,17 +2407,27 @@ function animate() {
   const deltaTime = Math.min((now - lastTime) / 1000, 0.1); // Cap at 0.1s to prevent huge jumps
   lastTime = now;
 
-  // Update clock system
-  clockManager.update(now);
+  // Update clock system - only if MIDI is enabled
+  if (featureSettings.midiEnabled) {
+    clockManager.update(now);
+  }
 
   // Update people simulation (pass all systems including MIDI and clock)
   peopleManager.update(deltaTime, cameraManager.cameras, triggerZones, clockManager, midiManager);
 
+  // Broadcast people locations via WebSocket (throttled to ~30Hz) - only if WebSocket is enabled
+  if (featureSettings.webSocketEnabled && now - lastWebSocketBroadcast >= webSocketBroadcastInterval) {
+    wsManager.broadcastPeople(peopleManager.people);
+    lastWebSocketBroadcast = now;
+  }
+
   // Update cameras (for pulsing boundary violation lines)
   cameraManager.cameras.forEach(cam => cam.update(deltaTime));
 
-  // Update FBO floor (with trigger animations)
-  updateFBOFloor(shaderFloor, deltaTime);
+  // Update FBO floor (with trigger animations) - only if enabled
+  if (floorEnabled) {
+    updateFBOFloor(shaderFloor, deltaTime);
+  }
 
   // Update raycast visualization
   updateRaycastVisualization(raycastLines);
@@ -2268,37 +2457,6 @@ function animate() {
       }
     }
   });
-
-  // Render floor FBO preview (top-down view)
-  if (!floorPreviewPanelCollapsed && floorPreviewReady) {
-    // Log computed styles once
-    if (!floorPreviewStylesLogged) {
-      floorPreviewStylesLogged = true;
-      const computed = window.getComputedStyle(floorPreviewCanvas);
-      console.log('[Floor Preview] Computed styles:', {
-        display: computed.display,
-        visibility: computed.visibility,
-        opacity: computed.opacity,
-        width: computed.width,
-        height: computed.height,
-        position: computed.position,
-        zIndex: computed.zIndex,
-        transform: computed.transform
-      });
-
-      // Check the actual pixel data to see if it's red
-      const gl = floorPreviewRenderer.getContext();
-      const pixels = new Uint8Array(4);
-      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-      console.log('[Floor Preview] Pixel at (0,0):', `rgba(${pixels[0]}, ${pixels[1]}, ${pixels[2]}, ${pixels[3]})`);
-      console.log('[Floor Preview] Expected red: rgba(255, 0, 0, 255)');
-    }
-
-    // Force clear with red color
-    floorPreviewRenderer.setClearColor(0xff0000, 1.0);
-    floorPreviewRenderer.clear(true, true, true);
-    floorPreviewRenderer.render(floorPreviewScene, floorPreviewCamera);
-  }
 }
 
 animate();

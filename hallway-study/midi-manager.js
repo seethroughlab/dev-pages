@@ -13,6 +13,7 @@ export class MIDIManager {
     this.isConnected = false;
     this.selectedOutputId = null;
     this.selectedInputId = null;
+    this.enabled = true; // Master enable/disable flag for all MIDI output
 
     // Callbacks for MIDI Clock sync (set by clock-manager)
     this.onClockTick = null;      // Called on each MIDI Clock message (0xF8)
@@ -241,6 +242,8 @@ export class MIDIManager {
    * @param {number} channel - MIDI channel (1-16)
    */
   sendNoteOn(note, velocity = 100, channel = 1) {
+    if (!this.enabled) return; // Skip if MIDI is disabled
+
     if (!this.isConnected || !this.output) {
       console.warn('[MIDI] Not connected to any output');
       return;
@@ -262,6 +265,8 @@ export class MIDIManager {
    * @param {number} channel - MIDI channel (1-16)
    */
   sendNoteOff(note, channel = 1) {
+    if (!this.enabled) return; // Skip if MIDI is disabled
+
     if (!this.isConnected || !this.output) {
       console.warn('[MIDI] Not connected to any output');
       return;
@@ -283,6 +288,8 @@ export class MIDIManager {
    * @param {number} channel - MIDI channel (1-16)
    */
   sendCC(controller, value, channel = 1) {
+    if (!this.enabled) return; // Skip if MIDI is disabled
+
     if (!this.isConnected || !this.output) {
       console.warn('[MIDI] Not connected to any output');
       return;
@@ -322,12 +329,21 @@ export class MIDIManager {
    * Use this to stop any stuck notes
    */
   panic() {
+    if (!this.enabled) {
+      console.log('[MIDI] Panic skipped - MIDI is disabled');
+      return;
+    }
+
     if (!this.isConnected || !this.output) {
       console.warn('[MIDI] Not connected to any output');
       return;
     }
 
     console.log('[MIDI] 🚨 PANIC - Sending All Notes Off on all channels');
+
+    // Temporarily enable MIDI for panic (to send NoteOffs)
+    const wasEnabled = this.enabled;
+    this.enabled = true;
 
     // Send Note-Off for all 128 MIDI notes on channels 1, 2, and 3
     const channels = [1, 2, 3];
@@ -337,6 +353,9 @@ export class MIDIManager {
       }
     });
 
+    // Restore previous state
+    this.enabled = wasEnabled;
+
     console.log('[MIDI] ✓ Panic complete - all notes silenced');
   }
 
@@ -344,6 +363,7 @@ export class MIDIManager {
    * Send MIDI Clock tick (0xF8) - should be sent 24 times per quarter note
    */
   sendClockTick() {
+    if (!this.enabled) return; // Skip if MIDI is disabled
     if (!this.isConnected || !this.output) return;
     this.output.send([0xF8]);
 
@@ -357,6 +377,7 @@ export class MIDIManager {
    * Send MIDI Start (0xFA)
    */
   sendStart() {
+    if (!this.enabled) return; // Skip if MIDI is disabled
     if (!this.isConnected || !this.output) return;
     console.log('[MIDI Clock] Sending Start');
     this.output.send([0xFA]);
@@ -366,6 +387,7 @@ export class MIDIManager {
    * Send MIDI Stop (0xFC)
    */
   sendStop() {
+    if (!this.enabled) return; // Skip if MIDI is disabled
     if (!this.isConnected || !this.output) return;
     console.log('[MIDI Clock] Sending Stop');
     this.output.send([0xFC]);
@@ -375,9 +397,19 @@ export class MIDIManager {
    * Send MIDI Continue (0xFB)
    */
   sendContinue() {
+    if (!this.enabled) return; // Skip if MIDI is disabled
     if (!this.isConnected || !this.output) return;
     console.log('[MIDI Clock] Sending Continue');
     this.output.send([0xFB]);
+  }
+
+  /**
+   * Enable or disable all MIDI output
+   * @param {boolean} enabled - True to enable, false to disable
+   */
+  setEnabled(enabled) {
+    this.enabled = enabled;
+    console.log(`[MIDI] ${enabled ? 'Enabled' : 'Disabled'}`);
   }
 
   /**
