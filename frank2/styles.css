@@ -1,0 +1,309 @@
+/* Joe Frank Loop Player - Telephone Edition Styles */
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: #1a1a1a;
+    color: #f0f0f0;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    text-align: center;
+    padding: 40px;
+    background-color: #2a2a2a;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    max-width: 500px;
+}
+
+h1 {
+    margin-bottom: 30px;
+    font-size: 2em;
+    color: #d0d0d0;
+}
+
+h2 {
+    font-size: 1.2em;
+    color: #888;
+}
+
+.episode-selector {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #333;
+    border-radius: 5px;
+}
+
+.episode-metadata {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: #333;
+    border-radius: 5px;
+    text-align: left;
+}
+
+.episode-metadata h2 {
+    margin: 0 0 10px 0;
+    font-size: 1.4em;
+    color: #f0f0f0;
+}
+
+.episode-metadata p {
+    margin: 5px 0;
+    color: #d0d0d0;
+}
+
+#episodeAuthor {
+    font-style: italic;
+    color: #b0b0b0;
+}
+
+.episode-selector label {
+    display: inline-block;
+    margin-right: 10px;
+    color: #d0d0d0;
+}
+
+#episodeList {
+    background-color: #4a4a4a;
+    color: #f0f0f0;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    font-size: 14px;
+    cursor: pointer;
+    min-width: 150px;
+}
+
+#episodeList:hover {
+    background-color: #5a5a5a;
+}
+
+.episode-progress {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: #333;
+    border-radius: 5px;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.episode-progress.hidden {
+    opacity: 0.3;
+}
+
+.progress-container {
+    position: relative;
+    width: 100%;
+    height: 8px;
+    background-color: #2a2a2a;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progress-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background-color: #4ecdc4;
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.progress-time {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #888;
+}
+
+.progress-time span {
+    font-family: 'Courier New', monospace;
+}
+
+.playback-status {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #4ecdc4;
+    font-style: italic;
+    min-height: 20px;
+}
+
+.controls {
+    margin: 20px 0;
+}
+
+button {
+    background-color: #4a4a4a;
+    color: #f0f0f0;
+    border: none;
+    padding: 15px 30px;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    margin: 0 10px;
+}
+
+button:hover {
+    background-color: #5a5a5a;
+}
+
+button:active {
+    background-color: #3a3a3a;
+}
+
+button:disabled {
+    background-color: #2a2a2a;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.status {
+    margin-top: 20px;
+    font-size: 14px;
+    color: #888;
+}
+
+.volume-controls {
+    margin: 20px 0;
+    padding: 20px;
+    background-color: #333;
+    border-radius: 5px;
+}
+
+.volume-control {
+    margin: 10px 0;
+}
+
+.volume-control label {
+    display: inline-block;
+    width: 150px;
+    text-align: right;
+    margin-right: 10px;
+}
+
+
+input[type="range"] {
+    width: 200px;
+    vertical-align: middle;
+}
+
+
+.error {
+    color: #ff6b6b;
+    margin-top: 20px;
+}
+
+.loading {
+    color: #4ecdc4;
+}
+
+.analyzer {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: #1a1a1a;
+    border-radius: 10px;
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+#fftCanvas {
+    display: block;
+    width: 100%;
+    height: 200px;
+    border: 1px solid #333;
+    border-radius: 5px;
+    background-color: #2a2a2a;
+}
+
+/* Debug Section */
+.debug-section {
+    margin-top: 30px;
+    padding: 20px;
+    background-color: #1a1a1a;
+    border-radius: 10px;
+    border: 1px solid #333;
+    display: none; /* Hidden by default */
+}
+
+.debug-section.visible {
+    display: block;
+}
+
+.debug-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.debug-header h3 {
+    margin: 0;
+    color: #d0d0d0;
+    font-size: 1.1em;
+}
+
+.debug-toggle {
+    background-color: #4a4a4a;
+    color: #f0f0f0;
+    border: none;
+    padding: 5px 15px;
+    font-size: 12px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.debug-toggle:hover {
+    background-color: #5a5a5a;
+}
+
+.debug-log {
+    width: 100%;
+    background-color: #0a0a0a;
+    color: #0f0;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    border: 1px solid #333;
+    border-radius: 5px;
+    padding: 10px;
+    resize: vertical;
+    min-height: 150px;
+}
+
+.debug-clear {
+    margin-top: 10px;
+    background-color: #4a4a4a;
+    color: #f0f0f0;
+    border: none;
+    padding: 8px 20px;
+    font-size: 12px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.debug-clear:hover {
+    background-color: #5a5a5a;
+}
+
+.show-debug-link {
+    color: #666;
+    font-size: 11px;
+    text-decoration: none;
+    cursor: pointer;
+    display: inline-block;
+    margin: 10px auto;
+}
+
+.show-debug-link:hover {
+    color: #888;
+    text-decoration: underline;
+}
+

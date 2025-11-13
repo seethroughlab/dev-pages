@@ -1,0 +1,12 @@
+TODO
+
+✅ COMPLETED:
+- Audio clips still do not play
+- The Cinematic Keys instrument is painful. Figure out how to make it less-so
+
+
+
+🔧 PROBLEMS:
+- Let's refactor the javascipt to make it more organized. Before you do anything, give me some suggestions on how we could separate indec.js into multiple files. 
+- Is there anything we can do to normalize the levels of the audio clips? Some of them are loud and some are soft. 
+- What effects can we add to the Audio Clips to make them sound like "found audio", like they might be from an old, forgotten casette tape>

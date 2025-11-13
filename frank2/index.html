@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joe Frank Player</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Joe Frank Player</h1>
+        
+        <div class="episode-selector">
+            <label for="episodeList">Select Episode:</label>
+            <select id="episodeList">
+                <option value="">Loading episodes...</option>
+            </select>
+        </div>
+        
+        <div class="episode-metadata" id="episodeMetadata" style="display: none;">
+            <h2 id="episodeTitle"></h2>
+            <p id="episodeDescription"></p>
+            <p id="episodeAuthor"></p>
+        </div>
+        
+        <div class="episode-progress">
+            <div class="progress-container">
+                <div id="episodeProgressBar" class="progress-bar"></div>
+            </div>
+            <div class="progress-time">
+                <span id="currentTime">0:00</span>
+                <span id="totalTime">30:00</span>
+            </div>
+            <div class="playback-status" id="playbackStatus"></div>
+        </div>
+        
+        <div class="controls">
+            <button id="playBtn">Play</button>
+            <button id="pauseBtn" disabled>Pause</button>
+            <button id="stopBtn" disabled>Stop</button>
+        </div>
+        
+        <div class="volume-controls">
+            <div class="volume-control">
+                <label for="musicVolume">Music Volume: </label>
+                <input type="range" id="musicVolume" min="0" max="100" value="30">
+                <span id="musicVolumeValue">30%</span>
+            </div>
+            <div class="volume-control">
+                <label for="storyVolume">Story Volume: </label>
+                <input type="range" id="storyVolume" min="0" max="100" value="70">
+                <span id="storyVolumeValue">70%</span>
+            </div>
+        </div>
+        
+        <div class="status" id="status">Ready to play</div>
+        
+        <div class="analyzer">
+            <canvas id="fftCanvas" width="500" height="200"></canvas>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+            <a href="#" id="showDebugBtn" class="show-debug-link">Show Debug</a>
+        </div>
+        
+        <div class="debug-section" id="debugSection">
+            <div class="debug-header">
+                <h3>Debug Log</h3>
+                <button id="toggleDebug" class="debug-toggle">Hide</button>
+            </div>
+            <textarea id="debugLog" class="debug-log" readonly rows="10"></textarea>
+            <button id="clearDebug" class="debug-clear">Clear Log</button>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

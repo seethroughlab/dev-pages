@@ -1,0 +1,3970 @@
+/**
+ * Ambient Noise Mixer - Radio Stream Version
+ * This version plays random segments from internet radio streams
+ * mixed with generated noise and synthesized melodies.
+ */
+
+// Radio streams configuration
+const streams = [
+    "http://ec2.yesstreaming.net:3540/stream",
+    "http://c34.radioboss.fm:8204/autodj",
+    "http://stream.radioinfoweb.net:8000/news",
+    "http://c34.radioboss.fm:8204/autodj",
+    "http://c3.radioboss.fm:8071/autodj",
+    "http://radio.streemlion.com:3990/stream",
+    "http://amp2.cesnet.cz:8000/cro-plus-256.ogg"
+];
+
+// Audio element and media source for streaming
+let currentAudio = null;
+let mediaSource = null;
+let currentClipDuration = 0;
+
+// Audio context and main nodes
+let audioContext;
+let isPlaying = false;
+let masterGain;
+
+// Noise generators
+let whiteNoiseNode, pinkNoiseNode, brownNoiseNode;
+let whiteGain, pinkGain, brownGain;
+
+// Tone.js effects for audio clips (not used anymore - using Web Audio API instead)
+// let toneClipEffectsGain = null;
+// let toneClipReverb = null;
+// let toneClipDelay = null;
+
+// Effect parameters (controllable via UI)
+let clipVolumeValue = 0.4;
+let reverbMixValue = 0.7;
+let delayTimeValue = 0.15;
+let delayFeedbackValue = 0.45;
+let delayMixValue = 0.5;
+
+// Wave effect parameters
+let waveEffectEnabled = false;
+let wavePhase = 0;
+let waveSpeed = 0.1; // seconds per wave phase unit
+let lastWaveUpdate = 0;
+
+// Melody parameters
+let melodyVolumeValue = 0.3;
+let bassVolumeValue = 0.4;
+let melodyAttackValue = 0.1;
+let melodyDecayValue = 0.2;
+let melodySustainValue = 0.3;
+let melodyReleaseValue = 1.5;
+
+// Melody effect parameters
+let melodyReverbMixValue = 0.5;
+let melodyDelayTimeValue = 0.3;
+let melodyDelayFeedbackValue = 0.3;
+let melodyDelayMixValue = 0.4;
+
+// Timing parameters
+let melodyMinDelay = 20; // 20 seconds minimum
+let melodyMaxDelay = 60; // 60 seconds maximum
+let clipMinDelay = 10; // 10 seconds minimum
+let clipMaxDelay = 60; // 60 seconds maximum
+
+// Filter parameters (Cinematic Keys)
+let filterCutoffValue = 2000;
+let filterResonanceValue = 8; // Increased for more audible sweep
+let filterEnvAmountValue = 0.9; // Increased for more dramatic sweep
+let filterDecayValue = 0.5;
+
+// Warm Pad parameters
+let warmPadAttackValue = 0.15;
+let warmPadDecayValue = 0.3;
+let warmPadSustainValue = 0.4;
+let warmPadReleaseValue = 2.0;
+let warmPadCutoffValue = 800;
+let warmPadResonanceValue = 2;
+let warmPadEnvAmountValue = 0.7;
+let warmPadFilterDecayValue = 0.6;
+
+// Ethereal Strings parameters
+let etherealStringsAttackValue = 0.5;
+let etherealStringsDecayValue = 0.4;
+let etherealStringsSustainValue = 0.7;
+let etherealStringsReleaseValue = 3.0;
+let etherealStringsCutoffValue = 1200;
+let etherealStringsResonanceValue = 1;
+let etherealStringsEnvAmountValue = 0.5;
+let etherealStringsFilterDecayValue = 1.0;
+
+// Deep Bass Drone parameters
+let deepBassAttackValue = 0.8;
+let deepBassDecayValue = 0.5;
+let deepBassSustainValue = 0.8;
+let deepBassReleaseValue = 4.0;
+let deepBassCutoffValue = 400;
+let deepBassResonanceValue = 3;
+let deepBassEnvAmountValue = 0.4;
+let deepBassFilterDecayValue = 1.5;
+
+// Master Effects parameters
+let masterCompThresholdValue = -24;
+let masterCompRatioValue = 4;
+let masterCompAttackValue = 0.003;
+let masterCompReleaseValue = 0.25;
+let masterLimiterThresholdValue = -3;
+let masterLimiterReleaseValue = 0.1;
+let masterEQLowValue = 0;
+let masterEQMidFreqValue = 1000;
+let masterEQMidGainValue = 0;
+let masterEQHighValue = 0;
+let masterStereoWidthValue = 1.0;
+let masterReverbMixValue = 0;
+let masterReverbRoomValue = 0.5;
+let masterReverbDampingValue = 0.5;
+
+// Musical scales for melody generation
+const scales = {
+    pentatonic: [0, 2, 4, 7, 9],  // C D E G A
+    major: [0, 2, 4, 5, 7, 9, 11], // C D E F G A B
+    minor: [0, 2, 3, 5, 7, 8, 10], // C D Eb F G Ab Bb
+    dorian: [0, 2, 3, 5, 7, 9, 10] // C D Eb F G A Bb
+};
+
+// Composer styles for melody generation
+const composers = {
+    mozart: { name: 'Mozart', style: 'classical elegance with alberti bass patterns', chordProb: 0.25, stepwiseProb: 0.7, octaveRange: 2 },
+    debussy: { name: 'Debussy', style: 'impressionistic with whole tone scales and extended chords', chordProb: 0.45, stepwiseProb: 0.4, octaveRange: 3 },
+    sweelinck: { name: 'Jan Pieterszoon Sweelinck', style: 'Renaissance polyphony with intricate counterpoint', chordProb: 0.35, stepwiseProb: 0.6, octaveRange: 2.5 },
+    aphextwin: { name: 'Aphex Twin', style: 'electronic minimalism with complex rhythmic patterns', chordProb: 0.15, stepwiseProb: 0.3, octaveRange: 4 },
+    cage: { name: 'John Cage', style: 'experimental with chance operations and prepared piano', chordProb: 0.1, stepwiseProb: 0.2, octaveRange: 5 },
+    reich: { name: 'Steve Reich', style: 'minimalist with phasing patterns and gradual process', chordProb: 0.2, stepwiseProb: 0.8, octaveRange: 2 },
+    glass: { name: 'Philip Glass', style: 'repetitive minimalism with additive rhythms', chordProb: 0.3, stepwiseProb: 0.9, octaveRange: 1.5 },
+    richter: { name: 'Max Richter', style: 'post-minimalist with cinematic emotional depth', chordProb: 0.35, stepwiseProb: 0.75, octaveRange: 3 },
+    part: { name: 'Arvo Pärt', style: 'tintinnabuli technique with spiritual simplicity', chordProb: 0.4, stepwiseProb: 0.85, octaveRange: 2 }
+};
+
+// Base frequency for C4
+const BASE_FREQ = 261.63;
+
+
+/**
+ * Tone.js Instrument Classes
+ */
+
+// Tone.js synth instances
+let toneCinematicKeys = null;
+let toneWarmPad = null;
+let toneEtherealStrings = null;
+let toneDeepBassDrone = null;
+let toneMelodyEffects = null;
+let toneBassLine = null;
+
+// Heartbeat bass drum
+let toneBassDrum = null;
+let bassDrumSchedulerId = null;
+let bpm = 60; // 60 BPM for heartbeat-like rhythm
+let beatDuration = 60 / bpm; // Duration of one beat in seconds
+let melodyScheduleQueue = [];
+let heartbeatVolumeValue = 0.5;
+let kickAttackValue = 0.001; // Kick drum attack time in seconds
+
+// Ducking parameters
+let duckingAmount = 0.5; // How much to reduce volume (0-1)
+let duckingAttack = 0.005; // How fast to duck (seconds)
+let duckingRelease = 0.15; // How fast to return to normal (seconds)
+let duckingEnabled = true;
+
+// Master effect instances
+let masterLimiter = null;
+let masterEQLow = null;
+let masterEQMid = null;
+let masterEQHigh = null;
+let masterStereoWidener = null;
+let masterReverb = null;
+
+// Recording variables
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingStartTime = null;
+let recordingInterval = null;
+let audioRecordingStream = null;
+
+/**
+ * Initialize Tone.js instruments and effects
+ */
+async function initializeToneInstruments() {
+    // Wait for Tone.js to be loaded
+    if (typeof Tone === 'undefined') {
+        console.error('Tone.js not loaded');
+        return;
+    }
+    
+    // Start Tone.js audio context
+    await Tone.start();
+    console.log('Tone.js initialized');
+    
+    // Create melody effects chain with references for real-time updates
+    const melodyReverb = new Tone.Reverb({
+        decay: 3,
+        wet: melodyReverbMixValue
+    });
+    
+    const melodyDelayNode = new Tone.FeedbackDelay({
+        delayTime: melodyDelayTimeValue,
+        feedback: melodyDelayFeedbackValue,
+        wet: melodyDelayMixValue
+    });
+    
+    // Store references for real-time updates
+    window.toneEffects = {
+        reverb: melodyReverb,
+        delay: melodyDelayNode
+    };
+    
+    // Create master effects chain
+    // Master EQ
+    masterEQLow = new Tone.EQ3({
+        low: masterEQLowValue,
+        mid: masterEQMidGainValue,
+        high: masterEQHighValue,
+        lowFrequency: 80,
+        highFrequency: 10000
+    });
+    
+    // Master Compressor
+    const masterCompressor = new Tone.Compressor({
+        threshold: masterCompThresholdValue,
+        ratio: masterCompRatioValue,
+        attack: masterCompAttackValue,
+        release: masterCompReleaseValue
+    });
+    
+    // Master Limiter
+    masterLimiter = new Tone.Limiter(masterLimiterThresholdValue);
+    
+    // Stereo Widener
+    masterStereoWidener = new Tone.StereoWidener(masterStereoWidthValue);
+    
+    // Master Reverb
+    console.log('Creating master reverb with wet value:', masterReverbMixValue);
+    masterReverb = new Tone.Reverb({
+        decay: 4,
+        wet: masterReverbMixValue,
+        preDelay: 0.01
+    });
+    
+    // Connect master chain: EQ -> Compressor -> Limiter -> Stereo -> Reverb -> Destination
+    masterEQLow.connect(masterCompressor);
+    masterCompressor.connect(masterLimiter);
+    masterLimiter.connect(masterStereoWidener);
+    masterStereoWidener.connect(masterReverb);
+    masterReverb.toDestination();
+    
+    // Create melody volume control
+    const melodyVolumeNode = new Tone.Gain(melodyVolumeValue);
+    
+    // Connect effects chain
+    toneMelodyEffects = new Tone.Gain(1);
+    toneMelodyEffects.chain(melodyDelayNode, melodyReverb, melodyVolumeNode, masterEQLow);
+    
+    // Store references for real-time updates
+    window.toneEffects.volume = melodyVolumeNode;
+    window.masterCompressor = masterCompressor;
+    window.masterEffects = {
+        eq: masterEQLow,
+        compressor: masterCompressor,
+        limiter: masterLimiter,
+        stereoWidener: masterStereoWidener,
+        reverb: masterReverb
+    };
+    
+    // Create Cinematic Keys synth with softer tone
+    toneCinematicKeys = new Tone.PolySynth(Tone.Synth, {
+        oscillator: {
+            type: "triangle"  // Changed from sawtooth to triangle for softer tone
+        },
+        envelope: {
+            attack: melodyAttackValue,
+            decay: melodyDecayValue,
+            sustain: melodySustainValue * 0.7,  // Reduced sustain level
+            release: melodyReleaseValue
+        },
+        filterEnvelope: {
+            attack: melodyAttackValue,
+            decay: filterDecayValue,
+            sustain: 0.3,  // Reduced from 0.5 for darker tone
+            release: melodyReleaseValue,
+            baseFrequency: 150,  // Lowered from 200
+            octaves: 2.5,  // Reduced from 3 for less brightness
+            exponent: 2
+        },
+        volume: -6  // Reduce overall volume by 6dB
+    }).connect(toneMelodyEffects);
+    
+    // Add filter to cinematic keys with gentler settings
+    const cinematicFilter = new Tone.Filter({
+        frequency: Math.min(filterCutoffValue, 1500),  // Cap the cutoff frequency
+        type: "lowpass",
+        Q: Math.min(filterResonanceValue, 5),  // Limit resonance to prevent harshness
+        rolloff: -24  // Steeper rolloff for smoother sound
+    });
+    toneCinematicKeys.disconnect();
+    toneCinematicKeys.chain(cinematicFilter, toneMelodyEffects);
+    
+    // Store filter reference
+    window.toneFilters = window.toneFilters || {};
+    window.toneFilters.cinematic = cinematicFilter;
+    
+    // Create Warm Pad synth with layered oscillators
+    toneWarmPad = new Tone.PolySynth(Tone.Synth, {
+        oscillator: {
+            type: "sine"
+        },
+        envelope: {
+            attack: warmPadAttackValue,
+            decay: warmPadDecayValue,
+            sustain: warmPadSustainValue,
+            release: warmPadReleaseValue
+        },
+        filterEnvelope: {
+            attack: warmPadAttackValue,
+            decay: warmPadFilterDecayValue,
+            sustain: 0.5,
+            release: warmPadReleaseValue,
+            baseFrequency: 100,
+            octaves: 2.5,
+            exponent: 2
+        }
+    }).connect(toneMelodyEffects);
+    
+    // Add filters to warm pad
+    const warmLowpass = new Tone.Filter({
+        frequency: warmPadCutoffValue,
+        type: "lowpass",
+        Q: warmPadResonanceValue
+    });
+    const warmHighpass = new Tone.Filter({
+        frequency: 80,
+        type: "highpass",
+        Q: 0.7
+    });
+    toneWarmPad.disconnect();
+    toneWarmPad.chain(warmLowpass, warmHighpass, toneMelodyEffects);
+    
+    // Store filter references
+    window.toneFilters.warmLowpass = warmLowpass;
+    window.toneFilters.warmHighpass = warmHighpass;
+    
+    // Create Ethereal Strings synth
+    toneEtherealStrings = new Tone.PolySynth(Tone.Synth, {
+        oscillator: {
+            type: "sawtooth"
+        },
+        envelope: {
+            attack: etherealStringsAttackValue,
+            decay: etherealStringsDecayValue,
+            sustain: etherealStringsSustainValue,
+            release: etherealStringsReleaseValue
+        },
+        filterEnvelope: {
+            attack: etherealStringsAttackValue,
+            decay: etherealStringsFilterDecayValue,
+            sustain: 0.6,
+            release: etherealStringsReleaseValue,
+            baseFrequency: 150,
+            octaves: 3.5,
+            exponent: 2
+        }
+    }).connect(toneMelodyEffects);
+    
+    // Add filter to Ethereal Strings
+    const etherealFilter = new Tone.Filter({
+        frequency: etherealStringsCutoffValue,
+        type: "lowpass",
+        Q: etherealStringsResonanceValue
+    });
+    toneEtherealStrings.disconnect();
+    toneEtherealStrings.chain(etherealFilter, toneMelodyEffects);
+    
+    // Store filter reference
+    window.toneFilters.ethereal = etherealFilter;
+    
+    // Create Deep Bass Drone synth
+    toneDeepBassDrone = new Tone.PolySynth(Tone.Synth, {
+        oscillator: {
+            type: "triangle"
+        },
+        envelope: {
+            attack: deepBassAttackValue,
+            decay: deepBassDecayValue,
+            sustain: deepBassSustainValue,
+            release: deepBassReleaseValue
+        },
+        filterEnvelope: {
+            attack: deepBassAttackValue,
+            decay: deepBassFilterDecayValue,
+            sustain: 0.7,
+            release: deepBassReleaseValue,
+            baseFrequency: 50,
+            octaves: 2,
+            exponent: 3
+        }
+    }).connect(toneMelodyEffects);
+    
+    // Add filters to Deep Bass Drone
+    const bassLowpass = new Tone.Filter({
+        frequency: deepBassCutoffValue,
+        type: "lowpass",
+        Q: deepBassResonanceValue
+    });
+    const bassHighpass = new Tone.Filter({
+        frequency: 30,
+        type: "highpass",
+        Q: 0.5
+    });
+    toneDeepBassDrone.disconnect();
+    toneDeepBassDrone.chain(bassLowpass, bassHighpass, toneMelodyEffects);
+    
+    // Store filter references
+    window.toneFilters.bassLowpass = bassLowpass;
+    window.toneFilters.bassHighpass = bassHighpass;
+    
+    // Create Bass Line synth
+    toneBassLine = new Tone.MonoSynth({
+        oscillator: {
+            type: "sawtooth"
+        },
+        envelope: {
+            attack: 0.05,
+            decay: 0.1,
+            sustain: 0.9,
+            release: 0.3
+        },
+        filterEnvelope: {
+            attack: 0.001,
+            decay: 0.2,
+            sustain: 0.5,
+            release: 0.3,
+            baseFrequency: 80,
+            octaves: 2.5,
+            exponent: 2
+        }
+    }).connect(toneMelodyEffects);
+    
+    // Add a filter to the bass for a more controlled sound
+    const bassLineFilter = new Tone.Filter({
+        frequency: 500,
+        type: "lowpass",
+        Q: 1,
+        rolloff: -24
+    });
+    toneBassLine.disconnect();
+    toneBassLine.chain(bassLineFilter, toneMelodyEffects);
+    
+    // Store filter reference
+    window.toneFilters.bassLine = bassLineFilter;
+    
+    // Create Bass Drum synth for heartbeat rhythm
+    toneBassDrum = new Tone.MembraneSynth({
+        pitchDecay: 0.008,  // Much faster pitch decay for tighter kick
+        octaves: 4,  // Less octave range for more focused sound
+        oscillator: {
+            type: "sine"
+        },
+        envelope: {
+            attack: kickAttackValue,
+            decay: 0.1,  // Much shorter decay for punchy kick
+            sustain: 0,  // No sustain for clean thump
+            release: 0.1,  // Short release
+            attackCurve: "exponential"
+        }
+    });
+    
+    // Create a dedicated gain for the bass drum with boost
+    const bassDrumGain = new Tone.Gain(2.0); // Boost by 2x
+    toneBassDrum.connect(bassDrumGain);
+    
+    // Connect to Tone.js master output
+    bassDrumGain.toDestination();
+    
+    // Store reference for volume control
+    window.toneBassDrumGain = bassDrumGain;
+    
+    // Tune the bass drum to be low and punchy
+    toneBassDrum.set({
+        frequency: 60  // Slightly higher for more punch, less sub
+    });
+}
+
+/**
+ * Update Tone.js instrument parameters in real-time
+ */
+function updateToneInstrumentParameters() {
+    if (!toneCinematicKeys || !toneWarmPad || !toneEtherealStrings || !toneDeepBassDrone) return;
+    
+    // Update Cinematic Keys envelope
+    toneCinematicKeys.set({
+        envelope: {
+            attack: melodyAttackValue,
+            decay: melodyDecayValue,
+            sustain: melodySustainValue * 0.7,  // Keep the reduced sustain
+            release: melodyReleaseValue
+        }
+    });
+    
+    // Update Cinematic Keys filter envelope
+    if (toneCinematicKeys.options.filterEnvelope) {
+        toneCinematicKeys.set({
+            filterEnvelope: {
+                attack: melodyAttackValue,
+                decay: filterDecayValue,
+                sustain: 0.3,  // Keep the darker tone
+                release: melodyReleaseValue,
+                baseFrequency: 150,  // Keep the lower base frequency
+                octaves: 2.5 * filterEnvAmountValue,  // Reduced range
+                exponent: 2
+            }
+        });
+    }
+    
+    // Update Warm Pad envelope
+    toneWarmPad.set({
+        envelope: {
+            attack: warmPadAttackValue,
+            decay: warmPadDecayValue,
+            sustain: warmPadSustainValue,
+            release: warmPadReleaseValue
+        }
+    });
+    
+    // Update Warm Pad filter envelope
+    if (toneWarmPad.options.filterEnvelope) {
+        toneWarmPad.set({
+            filterEnvelope: {
+                attack: warmPadAttackValue,
+                decay: warmPadFilterDecayValue,
+                sustain: 0.5,
+                release: warmPadReleaseValue,
+                baseFrequency: 100,
+                octaves: 2.5 * warmPadEnvAmountValue,
+                exponent: 2
+            }
+        });
+    }
+    
+    // Update Ethereal Strings envelope
+    toneEtherealStrings.set({
+        envelope: {
+            attack: etherealStringsAttackValue,
+            decay: etherealStringsDecayValue,
+            sustain: etherealStringsSustainValue,
+            release: etherealStringsReleaseValue
+        }
+    });
+    
+    // Update Ethereal Strings filter envelope
+    if (toneEtherealStrings.options.filterEnvelope) {
+        toneEtherealStrings.set({
+            filterEnvelope: {
+                attack: etherealStringsAttackValue,
+                decay: etherealStringsFilterDecayValue,
+                sustain: 0.6,
+                release: etherealStringsReleaseValue,
+                baseFrequency: 150,
+                octaves: 3.5 * etherealStringsEnvAmountValue,
+                exponent: 2
+            }
+        });
+    }
+    
+    // Update Deep Bass Drone envelope
+    toneDeepBassDrone.set({
+        envelope: {
+            attack: deepBassAttackValue,
+            decay: deepBassDecayValue,
+            sustain: deepBassSustainValue,
+            release: deepBassReleaseValue
+        }
+    });
+    
+    // Update Deep Bass Drone filter envelope
+    if (toneDeepBassDrone.options.filterEnvelope) {
+        toneDeepBassDrone.set({
+            filterEnvelope: {
+                attack: deepBassAttackValue,
+                decay: deepBassFilterDecayValue,
+                sustain: 0.7,
+                release: deepBassReleaseValue,
+                baseFrequency: 50,
+                octaves: 2 * deepBassEnvAmountValue,
+                exponent: 3
+            }
+        });
+    }
+    
+    // Update filter parameters in real-time
+    if (window.toneFilters) {
+        // Update Cinematic Keys filter with limits
+        if (window.toneFilters.cinematic) {
+            window.toneFilters.cinematic.frequency.value = Math.min(filterCutoffValue, 1500);
+            window.toneFilters.cinematic.Q.value = Math.min(filterResonanceValue, 5);
+        }
+        
+        // Update Warm Pad filters
+        if (window.toneFilters.warmLowpass) {
+            window.toneFilters.warmLowpass.frequency.value = warmPadCutoffValue;
+            window.toneFilters.warmLowpass.Q.value = warmPadResonanceValue;
+        }
+        
+        // Update Ethereal Strings filter
+        if (window.toneFilters.ethereal) {
+            window.toneFilters.ethereal.frequency.value = etherealStringsCutoffValue;
+            window.toneFilters.ethereal.Q.value = etherealStringsResonanceValue;
+        }
+        
+        // Update Deep Bass Drone filters
+        if (window.toneFilters.bassLowpass) {
+            window.toneFilters.bassLowpass.frequency.value = deepBassCutoffValue;
+            window.toneFilters.bassLowpass.Q.value = deepBassResonanceValue;
+        }
+    }
+    
+    // Update Ethereal Strings envelope
+    toneEtherealStrings.set({
+        envelope: {
+            attack: etherealStringsAttackValue,
+            decay: etherealStringsDecayValue,
+            sustain: etherealStringsSustainValue,
+            release: etherealStringsReleaseValue
+        }
+    });
+    
+    // Update Ethereal Strings filter envelope
+    if (toneEtherealStrings.options.filterEnvelope) {
+        toneEtherealStrings.set({
+            filterEnvelope: {
+                attack: etherealStringsAttackValue,
+                decay: etherealStringsFilterDecayValue,
+                sustain: 0.6,
+                release: etherealStringsReleaseValue,
+                baseFrequency: 150,
+                octaves: 3.5 * etherealStringsEnvAmountValue,
+                exponent: 2
+            }
+        });
+    }
+    
+    // Update Deep Bass Drone envelope
+    toneDeepBassDrone.set({
+        envelope: {
+            attack: deepBassAttackValue,
+            decay: deepBassDecayValue,
+            sustain: deepBassSustainValue,
+            release: deepBassReleaseValue
+        }
+    });
+    
+    // Update Deep Bass Drone filter envelope
+    if (toneDeepBassDrone.options.filterEnvelope) {
+        toneDeepBassDrone.set({
+            filterEnvelope: {
+                attack: deepBassAttackValue,
+                decay: deepBassFilterDecayValue,
+                sustain: 0.7,
+                release: deepBassReleaseValue,
+                baseFrequency: 50,
+                octaves: 2 * deepBassEnvAmountValue,
+                exponent: 3
+            }
+        });
+    }
+}
+
+/**
+ * Update Tone.js effects parameters
+ */
+function updateToneEffectsParameters() {
+    if (!window.toneEffects) return;
+    
+    // Update delay parameters
+    if (window.toneEffects.delay) {
+        window.toneEffects.delay.delayTime.value = melodyDelayTimeValue;
+        window.toneEffects.delay.feedback.value = melodyDelayFeedbackValue;
+        window.toneEffects.delay.wet.value = melodyDelayMixValue;
+    }
+    
+    // Update reverb parameters
+    if (window.toneEffects.reverb) {
+        window.toneEffects.reverb.wet.value = melodyReverbMixValue;
+    }
+    
+    // Update melody volume
+    if (window.toneEffects.volume) {
+        window.toneEffects.volume.gain.value = melodyVolumeValue;
+    }
+}
+
+/**
+ * Play melody using Tone.js
+ */
+async function playMelodyWithTone() {
+    if (!toneCinematicKeys || !toneWarmPad || !toneEtherealStrings || !toneDeepBassDrone || !toneBassLine || !isPlaying) {
+        console.log('Tone.js instruments not initialized or not playing');
+        return;
+    }
+    
+    console.log('Starting Tone.js melody generation...');
+    const { melody, bassLine, selectedComposer, selectedScale, selectedForm } = await generateMelody();
+    console.log('Generated melody:', melody);
+    console.log('Generated bass line:', bassLine);
+    
+    // Determine which instrument to use (cycle through all 4)
+    const instrumentIndex = melodyInstrumentCounter % 4;
+    let instrument, instrumentName;
+    switch (instrumentIndex) {
+        case 0:
+            instrument = toneCinematicKeys;
+            instrumentName = 'Cinematic Keys';
+            break;
+        case 1:
+            instrument = toneWarmPad;
+            instrumentName = 'Warm Pad';
+            break;
+        case 2:
+            instrument = toneEtherealStrings;
+            instrumentName = 'Ethereal Strings';
+            break;
+        case 3:
+            instrument = toneDeepBassDrone;
+            instrumentName = 'Deep Bass Drone';
+            break;
+    }
+    
+    console.log(`Playing melody with ${melody.length} notes using Tone.js ${instrumentName}, volume: ${melodyVolumeValue}`);
+    
+    // Update status with detailed info
+    updateStatus(`Melody: ${instrumentName} playing ${selectedForm} form in ${window.lastSelectedScale} scale, style of ${selectedComposer.name}`);
+    
+    // Schedule notes
+    const now = Tone.now();
+    let currentTime = 0;
+    
+    // Schedule melody notes
+    melody.forEach((note, index) => {
+        if (note.isChord) {
+            const noteNames = note.frequencies.map(freq => Tone.Frequency(freq, "hz").toNote());
+            instrument.triggerAttackRelease(noteNames, note.duration, now + currentTime, note.velocity);
+        } else {
+            const noteName = Tone.Frequency(note.frequency, "hz").toNote();
+            instrument.triggerAttackRelease(noteName, note.duration, now + currentTime, note.velocity);
+        }
+        currentTime += note.duration;
+    });
+    
+    // Schedule bass notes with volume control
+    let maxBassEndTime = 0;
+    bassLine.forEach((bassNote) => {
+        const noteName = Tone.Frequency(bassNote.frequency, "hz").toNote();
+        toneBassLine.triggerAttackRelease(noteName, bassNote.duration, now + bassNote.time, bassNote.velocity * bassVolumeValue);
+        // Track the end time of the bass line
+        const bassEndTime = bassNote.time + bassNote.duration;
+        if (bassEndTime > maxBassEndTime) {
+            maxBassEndTime = bassEndTime;
+        }
+    });
+    
+    updateStatus(`Playing ${instrumentName} melody with ${selectedComposer.name}-style bass (${melody.length} notes, ${window.lastSelectedScale} scale)`);
+    
+    // Increment instrument counter for next melody
+    melodyInstrumentCounter++;
+    
+    // Get the maximum release time for the current instrument
+    let maxReleaseTime = 0;
+    switch (instrumentIndex) {
+        case 0:
+            maxReleaseTime = melodyReleaseValue;
+            break;
+        case 1:
+            maxReleaseTime = warmPadReleaseValue;
+            break;
+        case 2:
+            maxReleaseTime = etherealStringsReleaseValue;
+            break;
+        case 3:
+            maxReleaseTime = deepBassReleaseValue;
+            break;
+    }
+    
+    // Calculate the actual end time considering both melody and bass
+    const melodyEndTime = currentTime + maxReleaseTime;
+    const bassEndTime = maxBassEndTime + 0.3; // Add bass release time
+    const totalDuration = Math.max(melodyEndTime, bassEndTime) + 0.5; // Add 0.5s buffer
+    
+    console.log(`Melody duration: ${currentTime}s + release: ${maxReleaseTime}s = ${melodyEndTime}s`);
+    console.log(`Bass end time: ${bassEndTime}s`);
+    console.log(`Total duration with buffer: ${totalDuration}s`);
+    
+    // Schedule next melody after this one finishes (synced to beat)
+    scheduleNextMelodyOnBeat(totalDuration);
+}
+
+
+// Track which scales are enabled
+let enabledScales = ['minor']; // Default to minor only
+let enabledComposers = ['mozart', 'debussy', 'sweelinck', 'aphextwin', 'cage', 'reich', 'glass', 'richter', 'part']; // All composers enabled by default
+
+// AI melody generator - disabled in favor of enhanced algorithmic generation
+// let melodyGenerator = null;
+// let generatorLoading = false;
+
+// Track which instrument to use for melodies
+let melodyInstrumentCounter = 0;
+
+/**
+ * Cookie management functions
+ */
+function setCookie(name, value, days = 365) {
+    const expires = new Date();
+    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
+}
+
+function getCookie(name) {
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) {
+            const value = c.substring(nameEQ.length, c.length);
+            console.log(`Cookie found: ${name} = ${value}`);
+            return value;
+        }
+    }
+    console.log(`Cookie not found: ${name}`);
+    return null;
+}
+
+function saveSettings() {
+    // Save noise levels
+    setCookie('whiteNoise', document.getElementById('whiteNoise').value);
+    setCookie('pinkNoise', document.getElementById('pinkNoise').value);
+    setCookie('brownNoise', document.getElementById('brownNoise').value);
+    
+    // Save effect settings
+    setCookie('clipVolume', document.getElementById('clipVolume').value);
+    setCookie('reverbMix', document.getElementById('reverbMix').value);
+    setCookie('delayTime', document.getElementById('delayTime').value);
+    setCookie('delayFeedback', document.getElementById('delayFeedback').value);
+    setCookie('delayMix', document.getElementById('delayMix').value);
+    
+    // Save wave effect setting
+    setCookie('waveEffect', document.getElementById('waveEffect').checked);
+    
+    // Save melody settings
+    setCookie('melodyVolume', document.getElementById('melodyVolume').value);
+    setCookie('bassVolume', document.getElementById('bassVolume').value);
+    setCookie('heartbeatVolume', document.getElementById('heartbeatVolume').value);
+    setCookie('heartbeatBPM', document.getElementById('heartbeatBPM').value);
+    setCookie('melodyAttack', document.getElementById('melodyAttack').value);
+    setCookie('melodyDecay', document.getElementById('melodyDecay').value);
+    setCookie('melodySustain', document.getElementById('melodySustain').value);
+    setCookie('melodyRelease', document.getElementById('melodyRelease').value);
+    
+    // Save scale selections
+    setCookie('scalePentatonic', document.getElementById('scalePentatonic').checked);
+    setCookie('scaleMajor', document.getElementById('scaleMajor').checked);
+    setCookie('scaleMinor', document.getElementById('scaleMinor').checked);
+    setCookie('scaleDorian', document.getElementById('scaleDorian').checked);
+    
+    // Save composer selections
+    setCookie('composerMozart', document.getElementById('composerMozart').checked);
+    setCookie('composerDebussy', document.getElementById('composerDebussy').checked);
+    setCookie('composerSweelinck', document.getElementById('composerSweelinck').checked);
+    setCookie('composerAphexTwin', document.getElementById('composerAphexTwin').checked);
+    setCookie('composerCage', document.getElementById('composerCage').checked);
+    setCookie('composerReich', document.getElementById('composerReich').checked);
+    setCookie('composerGlass', document.getElementById('composerGlass').checked);
+    setCookie('composerRichter', document.getElementById('composerRichter').checked);
+    setCookie('composerPart', document.getElementById('composerPart').checked);
+    
+    // Save active instrument selection
+    const activeInstrument = document.querySelector('.instrument-button.active');
+    if (activeInstrument) {
+        setCookie('activeInstrument', activeInstrument.dataset.instrument);
+    }
+    
+    // Save melody effect settings
+    setCookie('melodyReverbMix', document.getElementById('melodyReverbMix').value);
+    setCookie('melodyDelayTime', document.getElementById('melodyDelayTime').value);
+    setCookie('melodyDelayFeedback', document.getElementById('melodyDelayFeedback').value);
+    setCookie('melodyDelayMix', document.getElementById('melodyDelayMix').value);
+    
+    // Save filter settings
+    setCookie('filterCutoff', document.getElementById('filterCutoff').value);
+    setCookie('filterResonance', document.getElementById('filterResonance').value);
+    setCookie('filterEnvAmount', document.getElementById('filterEnvAmount').value);
+    setCookie('filterDecay', document.getElementById('filterDecay').value);
+    
+    // Save warm pad settings
+    setCookie('warmPadAttack', document.getElementById('warmPadAttack').value);
+    setCookie('warmPadDecay', document.getElementById('warmPadDecay').value);
+    setCookie('warmPadSustain', document.getElementById('warmPadSustain').value);
+    setCookie('warmPadRelease', document.getElementById('warmPadRelease').value);
+    setCookie('warmPadCutoff', document.getElementById('warmPadCutoff').value);
+    setCookie('warmPadResonance', document.getElementById('warmPadResonance').value);
+    setCookie('warmPadEnvAmount', document.getElementById('warmPadEnvAmount').value);
+    setCookie('warmPadFilterDecay', document.getElementById('warmPadFilterDecay').value);
+    
+    // Save ethereal strings settings
+    setCookie('etherealStringsAttack', document.getElementById('etherealStringsAttack').value);
+    setCookie('etherealStringsDecay', document.getElementById('etherealStringsDecay').value);
+    setCookie('etherealStringsSustain', document.getElementById('etherealStringsSustain').value);
+    setCookie('etherealStringsRelease', document.getElementById('etherealStringsRelease').value);
+    setCookie('etherealStringsCutoff', document.getElementById('etherealStringsCutoff').value);
+    setCookie('etherealStringsResonance', document.getElementById('etherealStringsResonance').value);
+    setCookie('etherealStringsEnvAmount', document.getElementById('etherealStringsEnvAmount').value);
+    setCookie('etherealStringsFilterDecay', document.getElementById('etherealStringsFilterDecay').value);
+    
+    // Save deep bass drone settings
+    setCookie('deepBassAttack', document.getElementById('deepBassAttack').value);
+    setCookie('deepBassDecay', document.getElementById('deepBassDecay').value);
+    setCookie('deepBassSustain', document.getElementById('deepBassSustain').value);
+    setCookie('deepBassRelease', document.getElementById('deepBassRelease').value);
+    setCookie('deepBassCutoff', document.getElementById('deepBassCutoff').value);
+    setCookie('deepBassResonance', document.getElementById('deepBassResonance').value);
+    setCookie('deepBassEnvAmount', document.getElementById('deepBassEnvAmount').value);
+    setCookie('deepBassFilterDecay', document.getElementById('deepBassFilterDecay').value);
+    
+    // Save timing settings
+    setCookie('melodyMinDelay', melodyMinDelay);
+    setCookie('melodyMaxDelay', melodyMaxDelay);
+    setCookie('clipMinDelay', clipMinDelay);
+    setCookie('clipMaxDelay', clipMaxDelay);
+    
+    // Save master effects settings
+    setCookie('masterCompThreshold', document.getElementById('masterCompThreshold').value);
+    setCookie('masterCompRatio', document.getElementById('masterCompRatio').value);
+    setCookie('masterCompAttack', document.getElementById('masterCompAttack').value);
+    setCookie('masterCompRelease', document.getElementById('masterCompRelease').value);
+    setCookie('masterLimiterThreshold', document.getElementById('masterLimiterThreshold').value);
+    setCookie('masterLimiterRelease', document.getElementById('masterLimiterRelease').value);
+    setCookie('masterEQLow', document.getElementById('masterEQLow').value);
+    setCookie('masterEQMidFreq', document.getElementById('masterEQMidFreq').value);
+    setCookie('masterEQMidGain', document.getElementById('masterEQMidGain').value);
+    setCookie('masterEQHigh', document.getElementById('masterEQHigh').value);
+    setCookie('masterStereoWidth', document.getElementById('masterStereoWidth').value);
+    const masterReverbMixSliderValue = document.getElementById('masterReverbMix').value;
+    console.log('Saving masterReverbMix to cookie:', masterReverbMixSliderValue);
+    setCookie('masterReverbMix', masterReverbMixSliderValue);
+    setCookie('masterReverbRoom', document.getElementById('masterReverbRoom').value);
+    setCookie('masterReverbDamping', document.getElementById('masterReverbDamping').value);
+}
+
+function loadSettings() {
+    console.log('Loading settings from cookies...');
+    console.log('Current masterReverbMix HTML value before loading:', document.getElementById('masterReverbMix').value);
+    
+    // Load noise levels
+    const whiteNoise = getCookie('whiteNoise');
+    if (whiteNoise !== null) {
+        console.log('Loading whiteNoise:', whiteNoise);
+        document.getElementById('whiteNoise').value = whiteNoise;
+    }
+    
+    const pinkNoise = getCookie('pinkNoise');
+    if (pinkNoise !== null) {
+        console.log('Loading pinkNoise:', pinkNoise);
+        document.getElementById('pinkNoise').value = pinkNoise;
+    }
+    
+    const brownNoise = getCookie('brownNoise');
+    if (brownNoise !== null) {
+        console.log('Loading brownNoise:', brownNoise);
+        document.getElementById('brownNoise').value = brownNoise;
+    }
+    
+    // Load effect settings
+    const clipVolume = getCookie('clipVolume');
+    if (clipVolume !== null) {
+        document.getElementById('clipVolume').value = clipVolume;
+        clipVolumeValue = clipVolume / 100;
+    }
+    
+    const reverbMix = getCookie('reverbMix');
+    if (reverbMix !== null) {
+        document.getElementById('reverbMix').value = reverbMix;
+        reverbMixValue = reverbMix / 100;
+    }
+    
+    const delayTime = getCookie('delayTime');
+    if (delayTime !== null) {
+        document.getElementById('delayTime').value = delayTime;
+        delayTimeValue = delayTime / 100;
+    }
+    
+    const delayFeedback = getCookie('delayFeedback');
+    if (delayFeedback !== null) {
+        document.getElementById('delayFeedback').value = delayFeedback;
+        delayFeedbackValue = delayFeedback / 100;
+    }
+    
+    const delayMix = getCookie('delayMix');
+    if (delayMix !== null) {
+        document.getElementById('delayMix').value = delayMix;
+        delayMixValue = delayMix / 100;
+    }
+    
+    // Load wave effect setting
+    const waveEffect = getCookie('waveEffect');
+    if (waveEffect !== null) {
+        document.getElementById('waveEffect').checked = waveEffect === 'true';
+        waveEffectEnabled = waveEffect === 'true';
+    }
+    
+    // Load melody settings
+    const melodyVolume = getCookie('melodyVolume');
+    if (melodyVolume !== null) {
+        document.getElementById('melodyVolume').value = melodyVolume;
+        melodyVolumeValue = melodyVolume / 100;
+        console.log('Loaded melody volume from cookie:', melodyVolume, 'melodyVolumeValue:', melodyVolumeValue);
+    } else {
+        console.log('No melody volume cookie found, using default:', melodyVolumeValue);
+    }
+    
+    const bassVolume = getCookie('bassVolume');
+    if (bassVolume !== null) {
+        document.getElementById('bassVolume').value = bassVolume;
+        bassVolumeValue = bassVolume / 100;
+    }
+    
+    const heartbeatVolume = getCookie('heartbeatVolume');
+    if (heartbeatVolume !== null) {
+        document.getElementById('heartbeatVolume').value = heartbeatVolume;
+        heartbeatVolumeValue = heartbeatVolume / 100;
+    }
+    
+    const heartbeatBPM = getCookie('heartbeatBPM');
+    if (heartbeatBPM !== null) {
+        document.getElementById('heartbeatBPM').value = heartbeatBPM;
+        bpm = parseInt(heartbeatBPM);
+        beatDuration = 60 / bpm;
+    }
+    
+    const duckingAmountCookie = getCookie('duckingAmount');
+    if (duckingAmountCookie !== null) {
+        document.getElementById('duckingAmount').value = duckingAmountCookie;
+        duckingAmount = duckingAmountCookie / 100;
+    }
+    
+    const duckingEnabledCookie = getCookie('duckingEnabled');
+    if (duckingEnabledCookie !== null) {
+        document.getElementById('duckingEnabled').checked = duckingEnabledCookie === 'true';
+        duckingEnabled = duckingEnabledCookie === 'true';
+    }
+    
+    const kickAttackCookie = getCookie('kickAttack');
+    if (kickAttackCookie !== null) {
+        document.getElementById('kickAttack').value = kickAttackCookie;
+        kickAttackValue = kickAttackCookie / 1000;
+    }
+    
+    const duckingAttackCookie = getCookie('duckingAttack');
+    if (duckingAttackCookie !== null) {
+        document.getElementById('duckingAttack').value = duckingAttackCookie;
+        duckingAttack = duckingAttackCookie / 1000;
+    }
+    
+    const melodyAttack = getCookie('melodyAttack');
+    if (melodyAttack !== null) {
+        document.getElementById('melodyAttack').value = melodyAttack;
+        melodyAttackValue = melodyAttack / 100;
+    }
+    
+    const melodyDecay = getCookie('melodyDecay');
+    if (melodyDecay !== null) {
+        document.getElementById('melodyDecay').value = melodyDecay;
+        melodyDecayValue = melodyDecay / 100;
+    }
+    
+    const melodySustain = getCookie('melodySustain');
+    if (melodySustain !== null) {
+        document.getElementById('melodySustain').value = melodySustain;
+        melodySustainValue = melodySustain / 100;
+    }
+    
+    const melodyRelease = getCookie('melodyRelease');
+    if (melodyRelease !== null) {
+        document.getElementById('melodyRelease').value = melodyRelease;
+        melodyReleaseValue = melodyRelease / 100;
+    }
+    
+    // Load scale selections
+    const scalePentatonic = getCookie('scalePentatonic');
+    if (scalePentatonic !== null) {
+        document.getElementById('scalePentatonic').checked = scalePentatonic === 'true';
+    }
+    
+    const scaleMajor = getCookie('scaleMajor');
+    if (scaleMajor !== null) {
+        document.getElementById('scaleMajor').checked = scaleMajor === 'true';
+    }
+    
+    const scaleMinor = getCookie('scaleMinor');
+    if (scaleMinor !== null) {
+        document.getElementById('scaleMinor').checked = scaleMinor === 'true';
+    }
+    
+    const scaleDorian = getCookie('scaleDorian');
+    if (scaleDorian !== null) {
+        document.getElementById('scaleDorian').checked = scaleDorian === 'true';
+    }
+    
+    // Load composer selections
+    const composerMozart = getCookie('composerMozart');
+    if (composerMozart !== null) {
+        document.getElementById('composerMozart').checked = composerMozart === 'true';
+    }
+    
+    const composerDebussy = getCookie('composerDebussy');
+    if (composerDebussy !== null) {
+        document.getElementById('composerDebussy').checked = composerDebussy === 'true';
+    }
+    
+    const composerSweelinck = getCookie('composerSweelinck');
+    if (composerSweelinck !== null) {
+        document.getElementById('composerSweelinck').checked = composerSweelinck === 'true';
+    }
+    
+    const composerAphexTwin = getCookie('composerAphexTwin');
+    if (composerAphexTwin !== null) {
+        document.getElementById('composerAphexTwin').checked = composerAphexTwin === 'true';
+    }
+    
+    const composerCage = getCookie('composerCage');
+    if (composerCage !== null) {
+        document.getElementById('composerCage').checked = composerCage === 'true';
+    }
+    
+    const composerReich = getCookie('composerReich');
+    if (composerReich !== null) {
+        document.getElementById('composerReich').checked = composerReich === 'true';
+    }
+    
+    const composerGlass = getCookie('composerGlass');
+    if (composerGlass !== null) {
+        document.getElementById('composerGlass').checked = composerGlass === 'true';
+    }
+    
+    const composerRichter = getCookie('composerRichter');
+    if (composerRichter !== null) {
+        document.getElementById('composerRichter').checked = composerRichter === 'true';
+    }
+    
+    const composerPart = getCookie('composerPart');
+    if (composerPart !== null) {
+        document.getElementById('composerPart').checked = composerPart === 'true';
+    }
+    
+    // Load melody effect settings
+    const melodyReverbMix = getCookie('melodyReverbMix');
+    if (melodyReverbMix !== null) {
+        document.getElementById('melodyReverbMix').value = melodyReverbMix;
+        melodyReverbMixValue = melodyReverbMix / 100;
+    }
+    
+    const melodyDelayTime = getCookie('melodyDelayTime');
+    if (melodyDelayTime !== null) {
+        document.getElementById('melodyDelayTime').value = melodyDelayTime;
+        melodyDelayTimeValue = melodyDelayTime / 1000;
+    }
+    
+    const melodyDelayFeedback = getCookie('melodyDelayFeedback');
+    if (melodyDelayFeedback !== null) {
+        document.getElementById('melodyDelayFeedback').value = melodyDelayFeedback;
+        melodyDelayFeedbackValue = melodyDelayFeedback / 100;
+    }
+    
+    const melodyDelayMix = getCookie('melodyDelayMix');
+    if (melodyDelayMix !== null) {
+        document.getElementById('melodyDelayMix').value = melodyDelayMix;
+        melodyDelayMixValue = melodyDelayMix / 100;
+    }
+    
+    // Load filter settings
+    const filterCutoff = getCookie('filterCutoff');
+    if (filterCutoff !== null) {
+        document.getElementById('filterCutoff').value = filterCutoff;
+        filterCutoffValue = parseInt(filterCutoff);
+    }
+    
+    const filterResonance = getCookie('filterResonance');
+    if (filterResonance !== null) {
+        document.getElementById('filterResonance').value = filterResonance;
+        filterResonanceValue = parseInt(filterResonance);
+    }
+    
+    const filterEnvAmount = getCookie('filterEnvAmount');
+    if (filterEnvAmount !== null) {
+        document.getElementById('filterEnvAmount').value = filterEnvAmount;
+        filterEnvAmountValue = filterEnvAmount / 100;
+    }
+    
+    const filterDecay = getCookie('filterDecay');
+    if (filterDecay !== null) {
+        document.getElementById('filterDecay').value = filterDecay;
+        filterDecayValue = filterDecay / 100;
+    }
+    
+    // Load warm pad settings
+    const warmPadAttack = getCookie('warmPadAttack');
+    if (warmPadAttack !== null) {
+        document.getElementById('warmPadAttack').value = warmPadAttack;
+        warmPadAttackValue = warmPadAttack / 100;
+    }
+    
+    const warmPadDecay = getCookie('warmPadDecay');
+    if (warmPadDecay !== null) {
+        document.getElementById('warmPadDecay').value = warmPadDecay;
+        warmPadDecayValue = warmPadDecay / 100;
+    }
+    
+    const warmPadSustain = getCookie('warmPadSustain');
+    if (warmPadSustain !== null) {
+        document.getElementById('warmPadSustain').value = warmPadSustain;
+        warmPadSustainValue = warmPadSustain / 100;
+    }
+    
+    const warmPadRelease = getCookie('warmPadRelease');
+    if (warmPadRelease !== null) {
+        document.getElementById('warmPadRelease').value = warmPadRelease;
+        warmPadReleaseValue = warmPadRelease / 100;
+    }
+    
+    const warmPadCutoff = getCookie('warmPadCutoff');
+    if (warmPadCutoff !== null) {
+        document.getElementById('warmPadCutoff').value = warmPadCutoff;
+        warmPadCutoffValue = parseInt(warmPadCutoff);
+    }
+    
+    const warmPadResonance = getCookie('warmPadResonance');
+    if (warmPadResonance !== null) {
+        document.getElementById('warmPadResonance').value = warmPadResonance;
+        warmPadResonanceValue = parseInt(warmPadResonance);
+    }
+    
+    const warmPadEnvAmount = getCookie('warmPadEnvAmount');
+    if (warmPadEnvAmount !== null) {
+        document.getElementById('warmPadEnvAmount').value = warmPadEnvAmount;
+        warmPadEnvAmountValue = warmPadEnvAmount / 100;
+    }
+    
+    const warmPadFilterDecay = getCookie('warmPadFilterDecay');
+    if (warmPadFilterDecay !== null) {
+        document.getElementById('warmPadFilterDecay').value = warmPadFilterDecay;
+        warmPadFilterDecayValue = warmPadFilterDecay / 100;
+    }
+    
+    // Load ethereal strings settings
+    const etherealStringsAttack = getCookie('etherealStringsAttack');
+    if (etherealStringsAttack !== null) {
+        document.getElementById('etherealStringsAttack').value = etherealStringsAttack;
+        etherealStringsAttackValue = etherealStringsAttack / 100;
+    }
+    
+    const etherealStringsDecay = getCookie('etherealStringsDecay');
+    if (etherealStringsDecay !== null) {
+        document.getElementById('etherealStringsDecay').value = etherealStringsDecay;
+        etherealStringsDecayValue = etherealStringsDecay / 100;
+    }
+    
+    const etherealStringsSustain = getCookie('etherealStringsSustain');
+    if (etherealStringsSustain !== null) {
+        document.getElementById('etherealStringsSustain').value = etherealStringsSustain;
+        etherealStringsSustainValue = etherealStringsSustain / 100;
+    }
+    
+    const etherealStringsRelease = getCookie('etherealStringsRelease');
+    if (etherealStringsRelease !== null) {
+        document.getElementById('etherealStringsRelease').value = etherealStringsRelease;
+        etherealStringsReleaseValue = etherealStringsRelease / 100;
+    }
+    
+    const etherealStringsCutoff = getCookie('etherealStringsCutoff');
+    if (etherealStringsCutoff !== null) {
+        document.getElementById('etherealStringsCutoff').value = etherealStringsCutoff;
+        etherealStringsCutoffValue = parseInt(etherealStringsCutoff);
+    }
+    
+    const etherealStringsResonance = getCookie('etherealStringsResonance');
+    if (etherealStringsResonance !== null) {
+        document.getElementById('etherealStringsResonance').value = etherealStringsResonance;
+        etherealStringsResonanceValue = parseInt(etherealStringsResonance);
+    }
+    
+    const etherealStringsEnvAmount = getCookie('etherealStringsEnvAmount');
+    if (etherealStringsEnvAmount !== null) {
+        document.getElementById('etherealStringsEnvAmount').value = etherealStringsEnvAmount;
+        etherealStringsEnvAmountValue = etherealStringsEnvAmount / 100;
+    }
+    
+    const etherealStringsFilterDecay = getCookie('etherealStringsFilterDecay');
+    if (etherealStringsFilterDecay !== null) {
+        document.getElementById('etherealStringsFilterDecay').value = etherealStringsFilterDecay;
+        etherealStringsFilterDecayValue = etherealStringsFilterDecay / 100;
+    }
+    
+    // Load deep bass drone settings
+    const deepBassAttack = getCookie('deepBassAttack');
+    if (deepBassAttack !== null) {
+        document.getElementById('deepBassAttack').value = deepBassAttack;
+        deepBassAttackValue = deepBassAttack / 100;
+    }
+    
+    const deepBassDecay = getCookie('deepBassDecay');
+    if (deepBassDecay !== null) {
+        document.getElementById('deepBassDecay').value = deepBassDecay;
+        deepBassDecayValue = deepBassDecay / 100;
+    }
+    
+    const deepBassSustain = getCookie('deepBassSustain');
+    if (deepBassSustain !== null) {
+        document.getElementById('deepBassSustain').value = deepBassSustain;
+        deepBassSustainValue = deepBassSustain / 100;
+    }
+    
+    const deepBassRelease = getCookie('deepBassRelease');
+    if (deepBassRelease !== null) {
+        document.getElementById('deepBassRelease').value = deepBassRelease;
+        deepBassReleaseValue = deepBassRelease / 100;
+    }
+    
+    const deepBassCutoff = getCookie('deepBassCutoff');
+    if (deepBassCutoff !== null) {
+        document.getElementById('deepBassCutoff').value = deepBassCutoff;
+        deepBassCutoffValue = parseInt(deepBassCutoff);
+    }
+    
+    const deepBassResonance = getCookie('deepBassResonance');
+    if (deepBassResonance !== null) {
+        document.getElementById('deepBassResonance').value = deepBassResonance;
+        deepBassResonanceValue = parseInt(deepBassResonance);
+    }
+    
+    const deepBassEnvAmount = getCookie('deepBassEnvAmount');
+    if (deepBassEnvAmount !== null) {
+        document.getElementById('deepBassEnvAmount').value = deepBassEnvAmount;
+        deepBassEnvAmountValue = deepBassEnvAmount / 100;
+    }
+    
+    const deepBassFilterDecay = getCookie('deepBassFilterDecay');
+    if (deepBassFilterDecay !== null) {
+        document.getElementById('deepBassFilterDecay').value = deepBassFilterDecay;
+        deepBassFilterDecayValue = deepBassFilterDecay / 100;
+    }
+    
+    // Load timing settings
+    const savedMelodyMinDelay = getCookie('melodyMinDelay');
+    if (savedMelodyMinDelay !== null) {
+        melodyMinDelay = parseInt(savedMelodyMinDelay);
+    }
+    
+    const savedMelodyMaxDelay = getCookie('melodyMaxDelay');
+    if (savedMelodyMaxDelay !== null) {
+        melodyMaxDelay = parseInt(savedMelodyMaxDelay);
+    }
+    
+    const savedClipMinDelay = getCookie('clipMinDelay');
+    if (savedClipMinDelay !== null) {
+        clipMinDelay = parseInt(savedClipMinDelay);
+    }
+    
+    const savedClipMaxDelay = getCookie('clipMaxDelay');
+    if (savedClipMaxDelay !== null) {
+        clipMaxDelay = parseInt(savedClipMaxDelay);
+    }
+    
+    // Update sliders if they exist
+    const melodySlider = document.getElementById('melodyTimingSlider');
+    if (melodySlider && melodySlider.noUiSlider) {
+        melodySlider.noUiSlider.set([melodyMinDelay, melodyMaxDelay]);
+    }
+    
+    const clipSlider = document.getElementById('clipTimingSlider');
+    if (clipSlider && clipSlider.noUiSlider) {
+        clipSlider.noUiSlider.set([clipMinDelay, clipMaxDelay]);
+    }
+    
+    // Load master effects settings
+    const masterCompThreshold = getCookie('masterCompThreshold');
+    if (masterCompThreshold !== null) {
+        const numericValue = parseFloat(masterCompThreshold);
+        document.getElementById('masterCompThreshold').value = numericValue;
+        masterCompThresholdValue = parseInt(numericValue);
+    }
+    
+    const masterCompRatio = getCookie('masterCompRatio');
+    if (masterCompRatio !== null) {
+        const numericValue = parseFloat(masterCompRatio);
+        document.getElementById('masterCompRatio').value = numericValue;
+        masterCompRatioValue = parseInt(numericValue);
+    }
+    
+    const masterCompAttack = getCookie('masterCompAttack');
+    if (masterCompAttack !== null) {
+        const numericValue = parseFloat(masterCompAttack);
+        document.getElementById('masterCompAttack').value = numericValue;
+        masterCompAttackValue = numericValue / 1000;
+    }
+    
+    const masterCompRelease = getCookie('masterCompRelease');
+    if (masterCompRelease !== null) {
+        const numericValue = parseFloat(masterCompRelease);
+        document.getElementById('masterCompRelease').value = numericValue;
+        masterCompReleaseValue = numericValue / 1000;
+    }
+    
+    const masterLimiterThreshold = getCookie('masterLimiterThreshold');
+    if (masterLimiterThreshold !== null) {
+        const numericValue = parseFloat(masterLimiterThreshold);
+        document.getElementById('masterLimiterThreshold').value = numericValue;
+        masterLimiterThresholdValue = parseInt(numericValue);
+    }
+    
+    const masterLimiterRelease = getCookie('masterLimiterRelease');
+    if (masterLimiterRelease !== null) {
+        const numericValue = parseFloat(masterLimiterRelease);
+        document.getElementById('masterLimiterRelease').value = numericValue;
+        masterLimiterReleaseValue = numericValue / 1000;
+    }
+    
+    const masterEQLow = getCookie('masterEQLow');
+    if (masterEQLow !== null) {
+        const numericValue = parseFloat(masterEQLow);
+        document.getElementById('masterEQLow').value = numericValue;
+        masterEQLowValue = parseInt(numericValue);
+    }
+    
+    const masterEQMidFreq = getCookie('masterEQMidFreq');
+    if (masterEQMidFreq !== null) {
+        const numericValue = parseFloat(masterEQMidFreq);
+        document.getElementById('masterEQMidFreq').value = numericValue;
+        masterEQMidFreqValue = parseInt(numericValue);
+    }
+    
+    const masterEQMidGain = getCookie('masterEQMidGain');
+    if (masterEQMidGain !== null) {
+        const numericValue = parseFloat(masterEQMidGain);
+        document.getElementById('masterEQMidGain').value = numericValue;
+        masterEQMidGainValue = parseInt(numericValue);
+    }
+    
+    const masterEQHigh = getCookie('masterEQHigh');
+    if (masterEQHigh !== null) {
+        const numericValue = parseFloat(masterEQHigh);
+        document.getElementById('masterEQHigh').value = numericValue;
+        masterEQHighValue = parseInt(numericValue);
+    }
+    
+    const masterStereoWidth = getCookie('masterStereoWidth');
+    if (masterStereoWidth !== null) {
+        const numericValue = parseFloat(masterStereoWidth);
+        document.getElementById('masterStereoWidth').value = numericValue;
+        masterStereoWidthValue = numericValue / 100;
+    }
+    
+    const masterReverbMix = getCookie('masterReverbMix');
+    const masterReverbMixElement = document.getElementById('masterReverbMix');
+    console.log('masterReverbMix element exists:', !!masterReverbMixElement);
+    console.log('Cookie value type:', typeof masterReverbMix, 'value:', masterReverbMix);
+    
+    if (masterReverbMix !== null && masterReverbMixElement) {
+        const numericValue = parseFloat(masterReverbMix);
+        console.log('Setting masterReverbMix slider to:', numericValue);
+        masterReverbMixElement.value = numericValue;
+        masterReverbMixValue = numericValue / 100;
+        console.log('After setting - HTML value:', masterReverbMixElement.value);
+        console.log('After setting - JS variable:', masterReverbMixValue);
+    } else if (masterReverbMix === null) {
+        console.log('No cookie found for masterReverbMix');
+    } else if (!masterReverbMixElement) {
+        console.log('ERROR: masterReverbMix element not found in DOM!');
+    }
+    
+    const masterReverbRoom = getCookie('masterReverbRoom');
+    if (masterReverbRoom !== null) {
+        const numericValue = parseFloat(masterReverbRoom);
+        document.getElementById('masterReverbRoom').value = numericValue;
+        masterReverbRoomValue = numericValue / 100;
+    }
+    
+    const masterReverbDamping = getCookie('masterReverbDamping');
+    if (masterReverbDamping !== null) {
+        const numericValue = parseFloat(masterReverbDamping);
+        document.getElementById('masterReverbDamping').value = numericValue;
+        masterReverbDampingValue = numericValue / 100;
+    }
+    
+    // Load active instrument selection
+    const activeInstrument = getCookie('activeInstrument');
+    if (activeInstrument !== null) {
+        switchInstrument(activeInstrument);
+    }
+    
+    // Update enabled scales and composers arrays
+    updateEnabledScales();
+    updateEnabledComposers();
+    
+    // Force update all displays
+    updateVolumeDisplays();
+    updateEffectDisplays();
+    updateMelodyDisplays();
+    updateMelodyEffectDisplays();
+    updateFilterDisplays();
+    updateWarmPadDisplays();
+    updateEtherealStringsDisplays();
+    updateDeepBassDisplays();
+    updateMasterEffectsDisplays();
+    
+    // Double-check that master effects values are properly set
+    // This is a workaround for a potential race condition
+    setTimeout(() => {
+        console.log('=== Re-applying Master Effects values ===');
+        const masterReverbMixCookie = getCookie('masterReverbMix');
+        if (masterReverbMixCookie !== null) {
+            const value = parseFloat(masterReverbMixCookie);
+            console.log('Re-applying masterReverbMix:', value);
+            document.getElementById('masterReverbMix').value = value;
+            document.getElementById('masterReverbMixValue').textContent = value + '%';
+        }
+        
+        const masterReverbRoomCookie = getCookie('masterReverbRoom');
+        if (masterReverbRoomCookie !== null) {
+            const value = parseFloat(masterReverbRoomCookie);
+            document.getElementById('masterReverbRoom').value = value;
+            document.getElementById('masterReverbRoomValue').textContent = value + '%';
+        }
+        
+        const masterReverbDampingCookie = getCookie('masterReverbDamping');
+        if (masterReverbDampingCookie !== null) {
+            const value = parseFloat(masterReverbDampingCookie);
+            document.getElementById('masterReverbDamping').value = value;
+            document.getElementById('masterReverbDampingValue').textContent = value + '%';
+        }
+        
+        const masterStereoWidthCookie = getCookie('masterStereoWidth');
+        if (masterStereoWidthCookie !== null) {
+            const value = parseFloat(masterStereoWidthCookie);
+            document.getElementById('masterStereoWidth').value = value;
+            document.getElementById('masterStereoWidthValue').textContent = value + '%';
+        }
+        
+        const masterCompThresholdCookie = getCookie('masterCompThreshold');
+        if (masterCompThresholdCookie !== null) {
+            const value = parseFloat(masterCompThresholdCookie);
+            document.getElementById('masterCompThreshold').value = value;
+            document.getElementById('masterCompThresholdValue').textContent = value + ' dB';
+        }
+        
+        const masterCompRatioCookie = getCookie('masterCompRatio');
+        if (masterCompRatioCookie !== null) {
+            const value = parseFloat(masterCompRatioCookie);
+            document.getElementById('masterCompRatio').value = value;
+            document.getElementById('masterCompRatioValue').textContent = value + ':1';
+        }
+        
+        const masterCompAttackCookie = getCookie('masterCompAttack');
+        if (masterCompAttackCookie !== null) {
+            const value = parseFloat(masterCompAttackCookie);
+            document.getElementById('masterCompAttack').value = value;
+            document.getElementById('masterCompAttackValue').textContent = value + 'ms';
+        }
+        
+        const masterCompReleaseCookie = getCookie('masterCompRelease');
+        if (masterCompReleaseCookie !== null) {
+            const value = parseFloat(masterCompReleaseCookie);
+            document.getElementById('masterCompRelease').value = value;
+            document.getElementById('masterCompReleaseValue').textContent = value + 'ms';
+        }
+        
+        const masterLimiterThresholdCookie = getCookie('masterLimiterThreshold');
+        if (masterLimiterThresholdCookie !== null) {
+            const value = parseFloat(masterLimiterThresholdCookie);
+            document.getElementById('masterLimiterThreshold').value = value;
+            document.getElementById('masterLimiterThresholdValue').textContent = value + ' dB';
+        }
+        
+        const masterLimiterReleaseCookie = getCookie('masterLimiterRelease');
+        if (masterLimiterReleaseCookie !== null) {
+            const value = parseFloat(masterLimiterReleaseCookie);
+            document.getElementById('masterLimiterRelease').value = value;
+            document.getElementById('masterLimiterReleaseValue').textContent = value + 'ms';
+        }
+        
+        const masterEQLowCookie = getCookie('masterEQLow');
+        if (masterEQLowCookie !== null) {
+            const value = parseFloat(masterEQLowCookie);
+            document.getElementById('masterEQLow').value = value;
+            document.getElementById('masterEQLowValue').textContent = value + ' dB';
+        }
+        
+        const masterEQMidFreqCookie = getCookie('masterEQMidFreq');
+        if (masterEQMidFreqCookie !== null) {
+            const value = parseFloat(masterEQMidFreqCookie);
+            document.getElementById('masterEQMidFreq').value = value;
+            document.getElementById('masterEQMidFreqValue').textContent = value + ' Hz';
+        }
+        
+        const masterEQMidGainCookie = getCookie('masterEQMidGain');
+        if (masterEQMidGainCookie !== null) {
+            const value = parseFloat(masterEQMidGainCookie);
+            document.getElementById('masterEQMidGain').value = value;
+            document.getElementById('masterEQMidGainValue').textContent = value + ' dB';
+        }
+        
+        const masterEQHighCookie = getCookie('masterEQHigh');
+        if (masterEQHighCookie !== null) {
+            const value = parseFloat(masterEQHighCookie);
+            document.getElementById('masterEQHigh').value = value;
+            document.getElementById('masterEQHighValue').textContent = value + ' dB';
+        }
+    }, 50);
+    
+    // Initialize bass drum gain if available (with 2x boost)
+    if (window.toneBassDrumGain) {
+        window.toneBassDrumGain.gain.value = heartbeatVolumeValue * 2.0;
+    }
+    
+    // Update master effects parameters if Tone.js is initialized
+    if (window.masterEffects && window.masterEffects.reverb) {
+        updateMasterEffects();
+    } else {
+        // If Tone.js isn't initialized yet, we need to apply these values later
+        // The values are already stored in the variables, so they'll be used when
+        // the effects are created in initToneInstruments
+        console.log('Master effects not yet initialized, values will be applied when audio starts');
+    }
+    
+    console.log('Settings loaded successfully');
+    console.log('Final masterReverbMix HTML value:', document.getElementById('masterReverbMix').value);
+    console.log('Final masterReverbMixValue variable:', masterReverbMixValue);
+}
+
+/**
+ * Initialize the audio system
+ */
+async function initAudio() {
+    // Create audio context
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    
+    // Load AudioWorklet modules
+    try {
+        await audioContext.audioWorklet.addModule('noise-processors.js');
+    } catch (error) {
+        console.error('Failed to load audio worklet:', error);
+        updateStatus('Error loading audio processors');
+        return;
+    }
+    
+    
+    // Create master gain node
+    masterGain = audioContext.createGain();
+    masterGain.gain.value = 0.5;
+    masterGain.connect(audioContext.destination);
+    
+    // Initialize Tone.js instruments first (creates master compressor)
+    await initializeToneInstruments();
+    
+    // Initialize components
+    await createNoiseGenerators();
+    // Audio streams will be initialized on demand when playing
+    
+    updateStatus('Audio initialized');
+}
+
+
+
+/**
+ * Create white noise generator using AudioWorklet
+ */
+async function createWhiteNoise() {
+    try {
+        const whiteNoise = new AudioWorkletNode(audioContext, 'white-noise-processor');
+        return whiteNoise;
+    } catch (error) {
+        console.error('Failed to create white noise worklet:', error);
+        return null;
+    }
+}
+
+/**
+ * Create pink noise generator using AudioWorklet
+ */
+async function createPinkNoise() {
+    try {
+        const pinkNoise = new AudioWorkletNode(audioContext, 'pink-noise-processor');
+        return pinkNoise;
+    } catch (error) {
+        console.error('Failed to create pink noise worklet:', error);
+        return null;
+    }
+}
+
+/**
+ * Create brown noise generator using AudioWorklet
+ */
+async function createBrownNoise() {
+    try {
+        const brownNoise = new AudioWorkletNode(audioContext, 'brown-noise-processor');
+        return brownNoise;
+    } catch (error) {
+        console.error('Failed to create brown noise worklet:', error);
+        return null;
+    }
+}
+
+// Old createBellPadVoice function removed - now using CinematicKeys class
+
+// Old createWarmPadVoice function removed - now using WarmPad class
+
+/**
+ * Update enabled scales based on checkboxes
+ */
+function updateEnabledScales() {
+    enabledScales = [];
+    
+    if (document.getElementById('scalePentatonic').checked) {
+        enabledScales.push('pentatonic');
+    }
+    if (document.getElementById('scaleMajor').checked) {
+        enabledScales.push('major');
+    }
+    if (document.getElementById('scaleMinor').checked) {
+        enabledScales.push('minor');
+    }
+    if (document.getElementById('scaleDorian').checked) {
+        enabledScales.push('dorian');
+    }
+    
+    // Ensure at least one scale is selected
+    if (enabledScales.length === 0) {
+        enabledScales = ['minor'];
+        document.getElementById('scaleMinor').checked = true;
+    }
+    
+    // Save to cookies
+    saveSettings();
+    
+    console.log('Enabled scales:', enabledScales);
+}
+
+/**
+ * Update enabled composers based on checkboxes
+ */
+function updateEnabledComposers() {
+    enabledComposers = [];
+    
+    if (document.getElementById('composerMozart').checked) {
+        enabledComposers.push('mozart');
+    }
+    if (document.getElementById('composerDebussy').checked) {
+        enabledComposers.push('debussy');
+    }
+    if (document.getElementById('composerSweelinck').checked) {
+        enabledComposers.push('sweelinck');
+    }
+    if (document.getElementById('composerAphexTwin').checked) {
+        enabledComposers.push('aphextwin');
+    }
+    if (document.getElementById('composerCage').checked) {
+        enabledComposers.push('cage');
+    }
+    if (document.getElementById('composerReich').checked) {
+        enabledComposers.push('reich');
+    }
+    if (document.getElementById('composerGlass').checked) {
+        enabledComposers.push('glass');
+    }
+    if (document.getElementById('composerRichter').checked) {
+        enabledComposers.push('richter');
+    }
+    if (document.getElementById('composerPart').checked) {
+        enabledComposers.push('part');
+    }
+    
+    // Ensure at least one composer is selected
+    if (enabledComposers.length === 0) {
+        enabledComposers = ['mozart'];
+        document.getElementById('composerMozart').checked = true;
+    }
+    
+    // Save to cookies
+    saveSettings();
+    
+    console.log('Enabled composers:', enabledComposers);
+}
+
+// AI melody generator removed - using enhanced algorithmic generation instead
+
+/**
+ * Parse ABC notation to frequency and duration
+ */
+function parseABCToNotes(abcString) {
+    const notes = [];
+    const noteMap = {
+        'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11,
+        'c': 12, 'd': 14, 'e': 16, 'f': 17, 'g': 19, 'a': 21, 'b': 23
+    };
+    
+    // Default duration values in ABC notation
+    const durationMap = {
+        '1': 0.5,    // whole note
+        '2': 0.25,   // half note
+        '4': 0.125,  // quarter note
+        '8': 0.0625, // eighth note
+        '/': 0.125,  // shorthand for eighth
+        '//': 0.0625 // shorthand for sixteenth
+    };
+    
+    // Parse the ABC string
+    const tokens = abcString.match(/\[[^\]]+\]|[A-Ga-g][',]*[0-9]*\/*|[\^_]?[A-Ga-g][',]*[0-9]*\/*|\|/g) || [];
+    
+    tokens.forEach(token => {
+        if (token === '|') return; // Skip bar lines
+        
+        // Handle chords
+        if (token.startsWith('[') && token.endsWith(']')) {
+            const chordNotes = token.slice(1, -1).match(/[A-Ga-g][',]*/g) || [];
+            const chord = [];
+            
+            chordNotes.forEach(note => {
+                const noteName = note[0];
+                const octaveModifiers = (note.match(/'/g) || []).length - (note.match(/,/g) || []).length;
+                
+                if (noteMap.hasOwnProperty(noteName)) {
+                    const semitones = noteMap[noteName] + (octaveModifiers * 12);
+                    const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+                    chord.push(frequency);
+                }
+            });
+            
+            if (chord.length > 0) {
+                notes.push({
+                    frequencies: chord,
+                    duration: 0.3,
+                    isChord: true
+                });
+            }
+        } else {
+            // Handle single notes
+            const match = token.match(/^([\^_]?)([A-Ga-g])([',]*)([0-9]*)(\/*)$/);
+            if (match) {
+                const [, accidental, noteName, octaveMarks, duration, slashes] = match;
+                const octaveModifiers = (octaveMarks.match(/'/g) || []).length - (octaveMarks.match(/,/g) || []).length;
+                
+                if (noteMap.hasOwnProperty(noteName)) {
+                    let semitones = noteMap[noteName] + (octaveModifiers * 12);
+                    
+                    // Handle accidentals
+                    if (accidental === '^') semitones += 1; // Sharp
+                    if (accidental === '_') semitones -= 1; // Flat
+                    
+                    const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+                    
+                    // Calculate duration (assuming 120 BPM, quarter note = 0.5s)
+                    let noteDuration = 0.5; // Default quarter note
+                    if (duration) {
+                        const num = parseInt(duration);
+                        if (num === 1) noteDuration = 2.0;      // whole note
+                        else if (num === 2) noteDuration = 1.0; // half note
+                        else if (num === 4) noteDuration = 0.5; // quarter note
+                        else if (num === 8) noteDuration = 0.25; // eighth note
+                        else noteDuration = 2.0 / num; // generic calculation
+                    } else if (slashes) {
+                        noteDuration = 0.5 / Math.pow(2, slashes.length); // Each slash halves duration
+                    }
+                    
+                    notes.push({
+                        frequency: frequency,
+                        duration: noteDuration,
+                        isChord: false
+                    });
+                }
+            }
+        }
+    });
+    
+    return notes;
+}
+
+/**
+ * Generate bass line based on composer style
+ */
+function generateBassLine(melody, selectedScale, selectedComposer, selectedForm) {
+    const bassLine = [];
+    const bassPatterns = {
+        mozart: generateMozartBass,
+        debussy: generateDebussyBass,
+        sweelinck: generateSweelinckBass,
+        aphextwin: generateAphexTwinBass,
+        cage: generateCageBass,
+        reich: generateReichBass,
+        glass: generateGlassBass,
+        richter: generateRichterBass,
+        part: generatePartBass
+    };
+    
+    const generateBass = bassPatterns[Object.keys(composers).find(key => composers[key] === selectedComposer)] || generateMozartBass;
+    return generateBass(melody, selectedScale, selectedForm);
+}
+
+/**
+ * Generate Mozart-style alberti bass
+ */
+function generateMozartBass(melody, selectedScale, selectedForm) {
+    const bassLine = [];
+    const chordProgressions = [
+        [0, 4, 0, 4], // I-V-I-V
+        [0, 3, 4, 0], // I-IV-V-I
+        [0, 5, 3, 4]  // I-vi-IV-V
+    ];
+    const progression = chordProgressions[Math.floor(Math.random() * chordProgressions.length)];
+    
+    let progressionIndex = 0;
+    let currentTime = 0;
+    
+    melody.forEach((note, index) => {
+        if (index % 4 === 0) { // Change bass every 4 notes
+            const bassNote = progression[progressionIndex % progression.length];
+            const octave = -2; // Two octaves below middle C
+            const scaleDegree = bassNote % selectedScale.length;
+            const semitones = selectedScale[scaleDegree] + (octave * 12);
+            const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+            
+            // Alberti bass pattern: root-fifth-third-fifth
+            const pattern = [0, 4, 2, 4];
+            pattern.forEach((interval, i) => {
+                const noteIndex = bassNote + interval;
+                const noteSemitones = selectedScale[noteIndex % selectedScale.length] + (octave * 12);
+                const noteFreq = BASE_FREQ * Math.pow(2, noteSemitones / 12);
+                bassLine.push({
+                    frequency: noteFreq,
+                    duration: note.duration / 4,
+                    velocity: 0.5,
+                    time: currentTime + (i * note.duration / 4)
+                });
+            });
+            progressionIndex++;
+        }
+        currentTime += note.duration;
+    });
+    
+    return bassLine;
+}
+
+/**
+ * Generate Debussy-style impressionistic bass
+ */
+function generateDebussyBass(melody, selectedScale, selectedForm) {
+    const bassLine = [];
+    let currentTime = 0;
+    
+    melody.forEach((note, index) => {
+        if (index % 8 === 0) { // Sparse bass notes
+            const bassNote = Math.floor(Math.random() * 7); // Any scale degree
+            const octave = -2;
+            const scaleDegree = bassNote % selectedScale.length;
+            const semitones = selectedScale[scaleDegree] + (octave * 12);
+            const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+            
+            bassLine.push({
+                frequency: frequency,
+                duration: note.duration * 4, // Long, sustained notes
+                velocity: 0.3, // Soft
+                time: currentTime
+            });
+        }
+        currentTime += note.duration;
+    });
+    
+    return bassLine;
+}
+
+/**
+ * Generate minimalist bass for Reich/Glass
+ */
+function generateReichBass(melody, selectedScale, selectedForm) {
+    const bassLine = [];
+    const pattern = [0, 0, 4, 4, 2, 2, 4, 4]; // Repetitive pattern
+    let patternIndex = 0;
+    let currentTime = 0;
+    
+    melody.forEach((note) => {
+        const bassNote = pattern[patternIndex % pattern.length];
+        const octave = -2;
+        const scaleDegree = bassNote % selectedScale.length;
+        const semitones = selectedScale[scaleDegree] + (octave * 12);
+        const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+        
+        bassLine.push({
+            frequency: frequency,
+            duration: note.duration,
+            velocity: 0.6,
+            time: currentTime
+        });
+        
+        patternIndex++;
+        currentTime += note.duration;
+    });
+    
+    return bassLine;
+}
+
+/**
+ * Generate Glass-style repetitive bass
+ */
+function generateGlassBass(melody, selectedScale, selectedForm) {
+    return generateReichBass(melody, selectedScale, selectedForm); // Similar approach
+}
+
+/**
+ * Generate Renaissance-style bass (Sweelinck)
+ */
+function generateSweelinckBass(melody, selectedScale, selectedForm) {
+    const bassLine = [];
+    let currentTime = 0;
+    
+    melody.forEach((note, index) => {
+        if (index % 2 === 0) { // Every other note
+            const interval = index % 8 < 4 ? 0 : 4; // Alternate between tonic and dominant
+            const octave = -2;
+            const scaleDegree = interval % selectedScale.length;
+            const semitones = selectedScale[scaleDegree] + (octave * 12);
+            const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+            
+            bassLine.push({
+                frequency: frequency,
+                duration: note.duration * 2,
+                velocity: 0.5,
+                time: currentTime
+            });
+        }
+        currentTime += note.duration;
+    });
+    
+    return bassLine;
+}
+
+/**
+ * Generate electronic bass (Aphex Twin)
+ */
+function generateAphexTwinBass(melody, selectedScale, selectedForm) {
+    const bassLine = [];
+    let currentTime = 0;
+    
+    melody.forEach((note, index) => {
+        if (Math.random() < 0.7) { // Irregular pattern
+            const bassNote = Math.floor(Math.random() * 5);
+            const octave = Math.random() < 0.3 ? -3 : -2; // Sometimes sub-bass
+            const scaleDegree = bassNote % selectedScale.length;
+            const semitones = selectedScale[scaleDegree] + (octave * 12);
+            const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+            
+            bassLine.push({
+                frequency: frequency,
+                duration: note.duration * (Math.random() < 0.5 ? 0.5 : 1),
+                velocity: 0.4 + Math.random() * 0.4,
+                time: currentTime
+            });
+        }
+        currentTime += note.duration;
+    });
+    
+    return bassLine;
+}
+
+/**
+ * Generate experimental bass (John Cage)
+ */
+function generateCageBass(melody, selectedScale, selectedForm) {
+    const bassLine = [];
+    let currentTime = 0;
+    
+    // Sparse, random bass notes
+    melody.forEach((note, index) => {
+        if (Math.random() < 0.2) { // Very sparse
+            const bassNote = Math.floor(Math.random() * selectedScale.length);
+            const octave = -2 - Math.floor(Math.random() * 2);
+            const scaleDegree = bassNote;
+            const semitones = selectedScale[scaleDegree] + (octave * 12);
+            const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+            
+            bassLine.push({
+                frequency: frequency,
+                duration: note.duration * (1 + Math.random() * 3),
+                velocity: 0.2 + Math.random() * 0.3,
+                time: currentTime
+            });
+        }
+        currentTime += note.duration;
+    });
+    
+    return bassLine;
+}
+
+/**
+ * Generate cinematic bass (Max Richter)
+ */
+function generateRichterBass(melody, selectedScale, selectedForm) {
+    const bassLine = [];
+    let currentTime = 0;
+    const progression = [0, 5, 3, 4]; // Emotional progression
+    let progressionIndex = 0;
+    
+    melody.forEach((note, index) => {
+        if (index % 8 === 0) { // Change every 8 notes
+            const bassNote = progression[progressionIndex % progression.length];
+            const octave = -2;
+            const scaleDegree = bassNote % selectedScale.length;
+            const semitones = selectedScale[scaleDegree] + (octave * 12);
+            const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+            
+            bassLine.push({
+                frequency: frequency,
+                duration: note.duration * 8, // Very long notes
+                velocity: 0.4,
+                time: currentTime
+            });
+            progressionIndex++;
+        }
+        currentTime += note.duration;
+    });
+    
+    return bassLine;
+}
+
+/**
+ * Generate tintinnabuli bass (Arvo Pärt)
+ */
+function generatePartBass(melody, selectedScale, selectedForm) {
+    const bassLine = [];
+    let currentTime = 0;
+    
+    melody.forEach((note, index) => {
+        if (index % 4 === 0) { // Every 4 notes
+            // Always return to tonic
+            const bassNote = 0;
+            const octave = -2;
+            const semitones = selectedScale[bassNote] + (octave * 12);
+            const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+            
+            bassLine.push({
+                frequency: frequency,
+                duration: note.duration * 4,
+                velocity: 0.3,
+                time: currentTime
+            });
+        }
+        currentTime += note.duration;
+    });
+    
+    return bassLine;
+}
+
+/**
+ * Generate a random melody using enhanced algorithmic generation
+ */
+async function generateMelody() {
+    const selectedScaleName = enabledScales[Math.floor(Math.random() * enabledScales.length)];
+    
+    // Select a random composer from enabled ones
+    const selectedComposerKey = enabledComposers[Math.floor(Math.random() * enabledComposers.length)];
+    const selectedComposer = composers[selectedComposerKey];
+    
+    // Enhanced algorithmic generation with musical structure
+    console.log(`Generating melody in style of ${selectedComposer.name} using ${selectedScaleName} scale`);
+    
+    // Store for status display
+    window.lastSelectedComposer = selectedComposer.name;
+    window.lastSelectedScale = selectedScaleName;
+    const selectedScale = scales[selectedScaleName];
+    
+    // Musical structure parameters
+    const notesPerBar = 4;
+    const barsPerPhrase = 4;
+    const notesPerPhrase = notesPerBar * barsPerPhrase;
+    
+    // Generate structured melody with AABA or ABAB form
+    const forms = ['AABA', 'ABAB', 'ABCA', 'AABB'];
+    const selectedForm = forms[Math.floor(Math.random() * forms.length)];
+    console.log(`Using musical form: ${selectedForm}`);
+    window.lastSelectedForm = selectedForm;
+    
+    // Generate the A and B themes
+    const themeA = generateTheme(selectedScale, selectedComposer, notesPerPhrase);
+    const themeB = generateTheme(selectedScale, selectedComposer, notesPerPhrase, themeA);
+    const themeC = selectedForm.includes('C') ? generateTheme(selectedScale, selectedComposer, notesPerPhrase, themeA) : null;
+    
+    // Build the complete melody based on the form
+    const melody = [];
+    for (let section of selectedForm) {
+        let theme;
+        if (section === 'A') {
+            theme = [...themeA]; // Copy the theme
+        } else if (section === 'B') {
+            theme = [...themeB];
+        } else if (section === 'C' && themeC) {
+            theme = [...themeC];
+        }
+        
+        // Add slight variations to repeating themes
+        if (melody.length > 0 && Math.random() < 0.3) {
+            theme = varyTheme(theme, selectedComposer);
+        }
+        
+        melody.push(...theme);
+    }
+    
+    // Generate bass line
+    const bassLine = generateBassLine(melody, selectedScale, selectedComposer, selectedForm);
+    
+    return { melody, bassLine, selectedComposer, selectedScale, selectedForm };
+}
+
+/**
+ * Generate a musical theme (phrase)
+ */
+function generateTheme(selectedScale, selectedComposer, length, referenceTheme = null) {
+    const theme = [];
+    let previousNote = referenceTheme ? referenceTheme[0].noteIndex || 0 : 0;
+    const notesPerBar = 4;
+    
+    for (let i = 0; i < length; i++) {
+        const barPosition = (i % notesPerBar) / notesPerBar;
+        const isDownbeat = i % notesPerBar === 0;
+        const isPhraseEnd = (i + 1) === length;
+        
+        // Decide if this should be a chord
+        if (Math.random() < selectedComposer.chordProb && i > 0) {
+            const chord = [];
+            const rootNote = previousNote;
+            
+            // Build chord based on composer style
+            if (selectedComposer.name === 'Debussy') {
+                // Extended chords with 7ths and 9ths
+                const intervals = [0, 2, 4, 6]; // Root, 3rd, 5th, 7th
+                intervals.forEach((interval, idx) => {
+                    if (idx === 0 || Math.random() < 0.7) {
+                        const note = rootNote + interval;
+                        const octave = Math.floor(note / selectedScale.length);
+                        const degree = ((note % selectedScale.length) + selectedScale.length) % selectedScale.length;
+                        const semitones = selectedScale[degree] + (octave * 12);
+                        chord.push(BASE_FREQ * Math.pow(2, semitones / 12));
+                    }
+                });
+            } else {
+                // Simple triads
+                [0, 2, 4].forEach(interval => {
+                    const note = rootNote + interval;
+                    const octave = Math.floor(note / selectedScale.length);
+                    const degree = ((note % selectedScale.length) + selectedScale.length) % selectedScale.length;
+                    const semitones = selectedScale[degree] + (octave * 12);
+                    chord.push(BASE_FREQ * Math.pow(2, semitones / 12));
+                });
+            }
+            
+            // Rhythm for chords
+            let duration = isDownbeat ? 1.0 : 0.5;
+            if (selectedComposer.name === 'Aphex Twin') {
+                duration = Math.random() < 0.5 ? 0.25 : 0.375; // Syncopated
+            }
+            
+            // Velocity for chords (usually played with more consistent velocity)
+            let velocity = 0.7 + Math.random() * 0.2; // 0.7-0.9
+            if (isDownbeat) {
+                velocity = Math.min(1.0, velocity + 0.1); // Accent downbeats
+            }
+            
+            theme.push({
+                frequencies: chord,
+                duration: duration,
+                velocity: velocity,
+                isChord: true,
+                noteIndex: previousNote
+            });
+        } else {
+            // Single note generation with musical logic
+            let noteIndex;
+            
+            // Phrase endings tend to resolve
+            if (isPhraseEnd) {
+                noteIndex = Math.random() < 0.7 ? 0 : 4; // Tonic or dominant
+            } else {
+                // Use stepwise motion based on composer
+                if (Math.random() < selectedComposer.stepwiseProb) {
+                    // Stepwise motion
+                    const direction = Math.random() > 0.5 ? 1 : -1;
+                    noteIndex = previousNote + direction;
+                } else {
+                    // Leap
+                    const leapSize = Math.floor(Math.random() * 4) + 2;
+                    const direction = Math.random() > 0.5 ? 1 : -1;
+                    noteIndex = previousNote + (direction * leapSize);
+                }
+            }
+            
+            // Keep within range
+            const maxNote = Math.floor(selectedComposer.octaveRange * selectedScale.length);
+            const minNote = -Math.floor(selectedScale.length);
+            noteIndex = Math.max(minNote, Math.min(maxNote, noteIndex));
+            
+            const octave = Math.floor(noteIndex / selectedScale.length);
+            const scaleDegree = ((noteIndex % selectedScale.length) + selectedScale.length) % selectedScale.length;
+            const semitones = selectedScale[scaleDegree] + (octave * 12);
+            const frequency = BASE_FREQ * Math.pow(2, semitones / 12);
+            
+            // Rhythmic patterns based on composer
+            let duration;
+            if (selectedComposer.name === 'Mozart') {
+                // Classical rhythms
+                if (isDownbeat) {
+                    duration = Math.random() < 0.7 ? 0.5 : 1.0;
+                } else {
+                    duration = Math.random() < 0.8 ? 0.25 : 0.5;
+                }
+            } else if (selectedComposer.name === 'Aphex Twin') {
+                // Complex rhythms
+                const rhythms = [0.125, 0.25, 0.375, 0.5, 0.75];
+                duration = rhythms[Math.floor(Math.random() * rhythms.length)];
+            } else {
+                // Default varied rhythms
+                const rhythmChoice = Math.random();
+                if (rhythmChoice < 0.15) {
+                    duration = 1.0;
+                } else if (rhythmChoice < 0.4) {
+                    duration = 0.25;
+                } else if (rhythmChoice < 0.5) {
+                    duration = 0.75;
+                } else {
+                    duration = 0.5;
+                }
+            }
+            
+            // Generate velocity based on musical context
+            let velocity = 0.5 + Math.random() * 0.3; // Base range 0.5-0.8
+            
+            // Accent patterns based on composer style
+            if (selectedComposer.name === 'Mozart') {
+                // Classical dynamics - emphasize downbeats and phrase beginnings
+                if (isDownbeat) {
+                    velocity = Math.min(1.0, velocity + 0.2);
+                } else if (barPosition < 0.25) {
+                    velocity = Math.min(1.0, velocity + 0.1);
+                }
+            } else if (selectedComposer.name === 'Debussy') {
+                // Impressionistic - more subtle, flowing dynamics
+                velocity = 0.4 + Math.sin(i * 0.5) * 0.2 + Math.random() * 0.2;
+            } else if (selectedComposer.name === 'Aphex Twin') {
+                // Electronic - more random, sometimes extreme
+                if (Math.random() < 0.1) {
+                    velocity = 0.9 + Math.random() * 0.1; // Occasional accent
+                } else {
+                    velocity = 0.3 + Math.random() * 0.5;
+                }
+            }
+            
+            // Softer endings
+            if (isPhraseEnd) {
+                velocity *= 0.7;
+            }
+            
+            theme.push({
+                frequency: frequency,
+                duration: duration,
+                velocity: velocity,
+                isChord: false,
+                noteIndex: noteIndex
+            });
+            
+            previousNote = noteIndex;
+        }
+    }
+    
+    return theme;
+}
+
+/**
+ * Create variations on an existing theme
+ */
+function varyTheme(theme, selectedComposer) {
+    return theme.map((note, index) => {
+        const newNote = { ...note };
+        
+        // Occasionally change rhythm
+        if (Math.random() < 0.2) {
+            if (selectedComposer.name === 'Mozart') {
+                // Classical variations - ornamentations
+                if (note.duration >= 0.5 && Math.random() < 0.3) {
+                    // Split long notes into shorter ornamental figures
+                    newNote.duration = note.duration / 2;
+                }
+            } else if (selectedComposer.name === 'Aphex Twin') {
+                // Electronic variations - glitchy rhythms
+                const rhythms = [0.125, 0.1875, 0.25, 0.375];
+                newNote.duration = rhythms[Math.floor(Math.random() * rhythms.length)];
+            }
+        }
+        
+        // Occasionally transpose or add octave displacement
+        if (Math.random() < 0.15 && !note.isChord) {
+            const octaveShift = Math.random() < 0.5 ? 12 : -12;
+            newNote.frequency = note.frequency * Math.pow(2, octaveShift / 12);
+        }
+        
+        // Vary dynamics slightly
+        if (Math.random() < 0.3) {
+            newNote.velocity = Math.max(0.2, Math.min(1.0, note.velocity + (Math.random() - 0.5) * 0.2));
+        }
+        
+        return newNote;
+    });
+}
+
+/**
+ * Play a generated melody (always uses Tone.js)
+ */
+async function playMelody() {
+    return playMelodyWithTone();
+}
+
+/**
+ * Schedule the next melody
+ * @param {number} currentMelodyDuration - Duration of the current melody in seconds
+ */
+function scheduleNextMelody(currentMelodyDuration = 0) {
+    const pauseBetweenMelodies = Math.random() * (melodyMaxDelay - melodyMinDelay) + melodyMinDelay;
+    const totalDelay = currentMelodyDuration + pauseBetweenMelodies;
+    
+    console.log(`Scheduling next melody in ${totalDelay.toFixed(1)}s (melody duration: ${currentMelodyDuration.toFixed(1)}s + pause: ${pauseBetweenMelodies.toFixed(1)}s)`);
+    
+    setTimeout(() => {
+        if (isPlaying) {
+            playMelody();
+        }
+    }, totalDelay * 1000);
+}
+
+/**
+ * Apply ducking effect to noise generators
+ */
+function applyDucking() {
+    if (!duckingEnabled || !audioContext) return;
+    
+    const now = audioContext.currentTime;
+    const targetGain = 1 - duckingAmount;
+    
+    // Get current wave modulation if enabled
+    const waveModulation = waveEffectEnabled ? calculateWaveModulation(now) : 1.0;
+    
+    // Duck all noise gains
+    if (whiteGain) {
+        const baseValue = document.getElementById('whiteNoise').value / 100;
+        const currentTarget = waveEffectEnabled ? baseValue * waveModulation : baseValue;
+        
+        whiteGain.gain.cancelScheduledValues(now);
+        whiteGain.gain.setValueAtTime(whiteGain.gain.value, now);
+        whiteGain.gain.linearRampToValueAtTime(
+            currentTarget * targetGain, 
+            now + duckingAttack
+        );
+        whiteGain.gain.linearRampToValueAtTime(
+            currentTarget, 
+            now + duckingAttack + duckingRelease
+        );
+    }
+    
+    if (pinkGain) {
+        const baseValue = document.getElementById('pinkNoise').value / 100;
+        const currentTarget = waveEffectEnabled ? baseValue * waveModulation : baseValue;
+        
+        pinkGain.gain.cancelScheduledValues(now);
+        pinkGain.gain.setValueAtTime(pinkGain.gain.value, now);
+        pinkGain.gain.linearRampToValueAtTime(
+            currentTarget * targetGain, 
+            now + duckingAttack
+        );
+        pinkGain.gain.linearRampToValueAtTime(
+            currentTarget, 
+            now + duckingAttack + duckingRelease
+        );
+    }
+    
+    if (brownGain) {
+        const baseValue = document.getElementById('brownNoise').value / 100;
+        const inverseModulation = waveEffectEnabled ? 1.5 - waveModulation : 1.0;
+        const currentTarget = waveEffectEnabled ? baseValue * inverseModulation * 0.7 : baseValue;
+        
+        brownGain.gain.cancelScheduledValues(now);
+        brownGain.gain.setValueAtTime(brownGain.gain.value, now);
+        brownGain.gain.linearRampToValueAtTime(
+            currentTarget * targetGain, 
+            now + duckingAttack
+        );
+        brownGain.gain.linearRampToValueAtTime(
+            currentTarget, 
+            now + duckingAttack + duckingRelease
+        );
+    }
+}
+
+/**
+ * Start the heartbeat bass drum rhythm
+ */
+function startHeartbeatRhythm() {
+    if (!toneBassDrum || bassDrumSchedulerId) return;
+    
+    console.log('Starting heartbeat rhythm at', bpm, 'BPM');
+    
+    // Heartbeat pattern: strong-weak (lub-dub)
+    let beatCount = 0;
+    
+    const scheduleHeartbeat = () => {
+        if (!isPlaying) {
+            stopHeartbeatRhythm();
+            return;
+        }
+        
+        const now = Tone.now();
+        const isStrongBeat = beatCount % 2 === 0;
+        
+        // Play the bass drum with different velocities for lub-dub effect
+        const note = isStrongBeat ? "C1" : "A0";
+        const velocity = isStrongBeat ? 0.9 : 0.6;
+        
+        toneBassDrum.triggerAttackRelease(
+            note,
+            "32n", // Very short duration for both beats (kick-like)
+            now,
+            velocity
+        );
+        
+        // Apply ducking effect to noise
+        applyDucking();
+        
+        beatCount++;
+        
+        // Schedule next beat
+        bassDrumSchedulerId = setTimeout(scheduleHeartbeat, beatDuration * 1000);
+    };
+    
+    // Start the heartbeat
+    scheduleHeartbeat();
+}
+
+/**
+ * Stop the heartbeat rhythm
+ */
+function stopHeartbeatRhythm() {
+    if (bassDrumSchedulerId) {
+        clearTimeout(bassDrumSchedulerId);
+        bassDrumSchedulerId = null;
+    }
+}
+
+/**
+ * Schedule melody to play on the next beat
+ */
+function scheduleMelodyOnBeat() {
+    // Calculate time until next strong beat (even beat count)
+    const currentTime = Tone.now();
+    const beatsSinceStart = Math.floor(currentTime / beatDuration);
+    const timeInCurrentBeat = currentTime % beatDuration;
+    const timeToNextBeat = beatDuration - timeInCurrentBeat;
+    
+    // If we're close to the next beat, wait for the one after
+    const waitBeats = timeToNextBeat < 0.1 ? 2 : 1;
+    const totalWait = timeToNextBeat + (waitBeats - 1) * beatDuration;
+    
+    // Make sure we start on a strong beat (even number)
+    const targetBeat = beatsSinceStart + waitBeats;
+    const isStrongBeat = targetBeat % 2 === 0;
+    const finalWait = isStrongBeat ? totalWait : totalWait + beatDuration;
+    
+    console.log(`Scheduling melody to start in ${finalWait.toFixed(2)}s (on beat)`);
+    
+    setTimeout(() => {
+        if (isPlaying) {
+            playMelody();
+        }
+    }, finalWait * 1000);
+}
+
+/**
+ * Modified schedule next melody to sync with beat
+ */
+function scheduleNextMelodyOnBeat(currentMelodyDuration = 0) {
+    const pauseBetweenMelodies = Math.random() * (melodyMaxDelay - melodyMinDelay) + melodyMinDelay;
+    const totalDelay = currentMelodyDuration + pauseBetweenMelodies;
+    
+    console.log(`Will schedule next melody after ${totalDelay.toFixed(1)}s delay`);
+    
+    setTimeout(() => {
+        if (isPlaying) {
+            scheduleMelodyOnBeat();
+        }
+    }, totalDelay * 1000);
+}
+
+/**
+ * Calculate wave modulation for ocean wave effect
+ * Returns a value between 0 and 1 representing wave intensity
+ */
+function calculateWaveModulation(currentTime) {
+    if (!waveEffectEnabled) return 1.0;
+    
+    // Update wave phase based on time elapsed
+    const deltaTime = currentTime - lastWaveUpdate;
+    lastWaveUpdate = currentTime;
+    wavePhase += deltaTime * waveSpeed;
+    
+    // Wave cycle: 0-1 = building, 1-2 = crashing, 2-3 = receding, 3-4 = calm
+    const cyclePhase = wavePhase % 4;
+    
+    let modulation = 1.0;
+    
+    if (cyclePhase < 1) {
+        // Building wave - gradual increase
+        modulation = 0.3 + (cyclePhase * 0.7);
+    } else if (cyclePhase < 2) {
+        // Crashing - peak intensity with rapid fluctuations
+        const crashPhase = cyclePhase - 1;
+        modulation = 1.0 - (crashPhase * 0.2) + (Math.sin(crashPhase * 20) * 0.1);
+    } else if (cyclePhase < 3) {
+        // Receding - gradual decrease
+        const recedePhase = cyclePhase - 2;
+        modulation = 0.8 - (recedePhase * 0.5);
+    } else {
+        // Calm between waves
+        modulation = 0.3;
+    }
+    
+    return modulation;
+}
+
+/**
+ * Apply wave modulation to noise gains
+ */
+function applyWaveModulation() {
+    if (!waveEffectEnabled || !audioContext) return;
+    
+    const currentTime = audioContext.currentTime;
+    const waveModulation = calculateWaveModulation(currentTime);
+    
+    // Different modulation for each noise type to simulate beach waves
+    if (whiteGain) {
+        // White noise: represents foam and spray, most affected by crashes
+        const whiteBase = document.getElementById('whiteNoise').value / 100;
+        const cyclePhase = wavePhase % 4;
+        if (cyclePhase >= 1 && cyclePhase < 2) {
+            // Boost during crash
+            whiteGain.gain.setTargetAtTime(whiteBase * waveModulation * 1.5, currentTime, 0.1);
+        } else {
+            whiteGain.gain.setTargetAtTime(whiteBase * waveModulation * 0.5, currentTime, 0.3);
+        }
+    }
+    
+    if (pinkGain) {
+        // Pink noise: main body of the wave
+        const pinkBase = document.getElementById('pinkNoise').value / 100;
+        pinkGain.gain.setTargetAtTime(pinkBase * waveModulation, currentTime, 0.2);
+    }
+    
+    if (brownGain) {
+        // Brown noise: deep rumble, inverse relationship (louder when building)
+        const brownBase = document.getElementById('brownNoise').value / 100;
+        const inverseModulation = 1.5 - waveModulation;
+        brownGain.gain.setTargetAtTime(brownBase * inverseModulation * 0.7, currentTime, 0.4);
+    }
+}
+
+/**
+ * Start wave effect animation loop
+ */
+function startWaveEffect() {
+    if (!waveEffectEnabled) return;
+    
+    function animateWaves() {
+        if (waveEffectEnabled && isPlaying) {
+            applyWaveModulation();
+            requestAnimationFrame(animateWaves);
+        }
+    }
+    
+    lastWaveUpdate = audioContext ? audioContext.currentTime : 0;
+    animateWaves();
+}
+
+/**
+ * Toggle wave effect
+ */
+function toggleWaveEffect() {
+    waveEffectEnabled = document.getElementById('waveEffect').checked;
+    
+    // Update UI to show/hide controls
+    const noiseControls = document.getElementById('noiseControls');
+    const waveNotice = document.getElementById('waveNotice');
+    
+    if (waveEffectEnabled) {
+        noiseControls.classList.add('disabled');
+        waveNotice.style.display = 'block';
+        if (isPlaying) {
+            startWaveEffect();
+        }
+    } else {
+        noiseControls.classList.remove('disabled');
+        waveNotice.style.display = 'none';
+        // Reset to normal values
+        updateVolumes();
+    }
+    
+    // Save to cookies
+    saveSettings();
+}
+
+/**
+ * Create and connect all noise generators
+ */
+async function createNoiseGenerators() {
+    // Get current slider values
+    const whiteValue = document.getElementById('whiteNoise').value / 100;
+    const pinkValue = document.getElementById('pinkNoise').value / 100;
+    const brownValue = document.getElementById('brownNoise').value / 100;
+    
+    // White noise
+    whiteNoiseNode = await createWhiteNoise();
+    if (whiteNoiseNode) {
+        whiteGain = audioContext.createGain();
+        whiteGain.gain.value = whiteValue;
+        whiteNoiseNode.connect(whiteGain);
+        whiteGain.connect(masterGain);
+    }
+    
+    // Pink noise
+    pinkNoiseNode = await createPinkNoise();
+    if (pinkNoiseNode) {
+        pinkGain = audioContext.createGain();
+        pinkGain.gain.value = pinkValue;
+        pinkNoiseNode.connect(pinkGain);
+        pinkGain.connect(masterGain);
+    }
+    
+    // Brown noise
+    brownNoiseNode = await createBrownNoise();
+    if (brownNoiseNode) {
+        brownGain = audioContext.createGain();
+        brownGain.gain.value = brownValue;
+        brownNoiseNode.connect(brownGain);
+        brownGain.connect(masterGain);
+    }
+}
+
+/**
+ * Create effects chain for audio clips using Tone.js
+ */
+async function createClipEffects() {
+    if (typeof Tone === 'undefined') {
+        console.error('Tone.js not loaded for clip effects');
+        return;
+    }
+    
+    // Create reverb effect
+    toneClipReverb = new Tone.Reverb({
+        decay: 2,
+        wet: reverbMixValue
+    });
+    
+    // Create delay effect
+    toneClipDelay = new Tone.FeedbackDelay({
+        delayTime: delayTimeValue,
+        feedback: delayFeedbackValue,
+        wet: delayMixValue
+    });
+    
+    // Create effects chain gain node
+    toneClipEffectsGain = new Tone.Gain(clipVolumeValue);
+    
+    // Connect effects chain: source -> delay -> reverb -> master effects
+    // Check if master effects exist, otherwise go to destination
+    if (window.masterEffects && window.masterEffects.eq) {
+        toneClipEffectsGain.chain(toneClipDelay, toneClipReverb, window.masterEffects.eq);
+    } else {
+        toneClipEffectsGain.chain(toneClipDelay, toneClipReverb, Tone.Destination);
+    }
+    
+    // Store references for real-time updates
+    window.toneClipEffects = {
+        reverb: toneClipReverb,
+        delay: toneClipDelay,
+        gain: toneClipEffectsGain
+    };
+}
+
+
+
+/**
+ * Update only the visual displays for volumes
+ */
+function updateVolumeDisplays() {
+    const whiteValue = document.getElementById('whiteNoise').value;
+    const pinkValue = document.getElementById('pinkNoise').value;
+    const brownValue = document.getElementById('brownNoise').value;
+    
+    document.getElementById('whiteValue').textContent = whiteValue + '%';
+    document.getElementById('pinkValue').textContent = pinkValue + '%';
+    document.getElementById('brownValue').textContent = brownValue + '%';
+}
+
+/**
+ * Update noise volumes from UI sliders
+ */
+function updateVolumes() {
+    updateVolumeDisplays();
+    
+    if (!audioContext) return;
+    
+    const whiteValue = document.getElementById('whiteNoise').value / 100;
+    const pinkValue = document.getElementById('pinkNoise').value / 100;
+    const brownValue = document.getElementById('brownNoise').value / 100;
+    
+    if (whiteGain) whiteGain.gain.value = whiteValue;
+    if (pinkGain) pinkGain.gain.value = pinkValue;
+    if (brownGain) brownGain.gain.value = brownValue;
+    
+    // Save settings to cookies
+    saveSettings();
+}
+
+/**
+ * Update only the visual displays for effects
+ */
+function updateEffectDisplays() {
+    const clipVolume = document.getElementById('clipVolume').value;
+    const reverbMix = document.getElementById('reverbMix').value;
+    const delayTime = document.getElementById('delayTime').value;
+    const delayFeedback = document.getElementById('delayFeedback').value;
+    const delayMix = document.getElementById('delayMix').value;
+    
+    document.getElementById('clipVolumeValue').textContent = clipVolume + '%';
+    document.getElementById('reverbMixValue').textContent = reverbMix + '%';
+    document.getElementById('delayTimeValue').textContent = (delayTime * 10) + 'ms';
+    document.getElementById('delayFeedbackValue').textContent = delayFeedback + '%';
+    document.getElementById('delayMixValue').textContent = delayMix + '%';
+}
+
+/**
+ * Update effect parameters from UI controls
+ */
+function updateEffects() {
+    // Update values from sliders
+    clipVolumeValue = document.getElementById('clipVolume').value / 100;
+    reverbMixValue = document.getElementById('reverbMix').value / 100;
+    delayTimeValue = document.getElementById('delayTime').value / 100;
+    delayFeedbackValue = document.getElementById('delayFeedback').value / 100;
+    delayMixValue = document.getElementById('delayMix').value / 100;
+    
+    // Update displays
+    updateEffectDisplays();
+    
+    // Note: Clip effects are now applied per-clip using Web Audio API
+    // The values are stored and will be used when the next clip plays
+    
+    // Save settings to cookies
+    saveSettings();
+}
+
+/**
+ * Update only the visual displays for melody parameters
+ */
+function updateMelodyDisplays() {
+    const melodyVolume = document.getElementById('melodyVolume').value;
+    const bassVolume = document.getElementById('bassVolume').value;
+    const heartbeatVolume = document.getElementById('heartbeatVolume').value;
+    const heartbeatBPM = document.getElementById('heartbeatBPM').value;
+    const melodyAttack = document.getElementById('melodyAttack').value;
+    const melodyDecay = document.getElementById('melodyDecay').value;
+    const melodySustain = document.getElementById('melodySustain').value;
+    const melodyRelease = document.getElementById('melodyRelease').value;
+    
+    document.getElementById('melodyVolumeValue').textContent = melodyVolume + '%';
+    document.getElementById('bassVolumeValue').textContent = bassVolume + '%';
+    document.getElementById('heartbeatVolumeValue').textContent = heartbeatVolume + '%';
+    document.getElementById('heartbeatBPMValue').textContent = heartbeatBPM + ' BPM';
+    document.getElementById('kickAttackValue').textContent = document.getElementById('kickAttack').value + 'ms';
+    document.getElementById('duckingAmountValue').textContent = document.getElementById('duckingAmount').value + '%';
+    document.getElementById('duckingAttackValue').textContent = document.getElementById('duckingAttack').value + 'ms';
+    document.getElementById('melodyAttackValue').textContent = (melodyAttack / 100).toFixed(1) + 's';
+    document.getElementById('melodyDecayValue').textContent = (melodyDecay / 100).toFixed(1) + 's';
+    document.getElementById('melodySustainValue').textContent = melodySustain + '%';
+    document.getElementById('melodyReleaseValue').textContent = (melodyRelease / 100).toFixed(1) + 's';
+}
+
+/**
+ * Update melody parameters from UI controls
+ */
+function updateMelodyParameters() {
+    // Update melody values
+    melodyVolumeValue = document.getElementById('melodyVolume').value / 100;
+    bassVolumeValue = document.getElementById('bassVolume').value / 100;
+    melodyAttackValue = document.getElementById('melodyAttack').value / 100;
+    melodyDecayValue = document.getElementById('melodyDecay').value / 100;
+    melodySustainValue = document.getElementById('melodySustain').value / 100;
+    melodyReleaseValue = document.getElementById('melodyRelease').value / 100;
+    
+    // Update displays
+    updateMelodyDisplays();
+    
+    // Update Tone.js instruments if initialized
+    updateToneInstrumentParameters();
+    
+    // Save settings to cookies
+    saveSettings();
+}
+
+/**
+ * Update heartbeat parameters from UI controls
+ */
+function updateHeartbeatParameters() {
+    // Update heartbeat values
+    heartbeatVolumeValue = document.getElementById('heartbeatVolume').value / 100;
+    const newBPM = parseInt(document.getElementById('heartbeatBPM').value);
+    
+    // Update displays
+    document.getElementById('heartbeatVolumeValue').textContent = Math.round(heartbeatVolumeValue * 100) + '%';
+    document.getElementById('heartbeatBPMValue').textContent = newBPM + ' BPM';
+    
+    // Update bass drum gain if available (with 2x boost)
+    if (window.toneBassDrumGain) {
+        window.toneBassDrumGain.gain.value = heartbeatVolumeValue * 2.0;
+    }
+    
+    // Update BPM if changed
+    if (newBPM !== bpm) {
+        bpm = newBPM;
+        beatDuration = 60 / bpm;
+        console.log('Updated BPM to', bpm, 'Beat duration:', beatDuration);
+        
+        // If heartbeat is playing, restart it with new tempo
+        if (bassDrumSchedulerId) {
+            stopHeartbeatRhythm();
+            startHeartbeatRhythm();
+        }
+    }
+    
+    // Save settings
+    setCookie('heartbeatVolume', document.getElementById('heartbeatVolume').value);
+    setCookie('heartbeatBPM', bpm);
+}
+
+/**
+ * Update kick drum parameters from UI controls
+ */
+function updateKickParameters() {
+    // Update kick attack value
+    kickAttackValue = document.getElementById('kickAttack').value / 1000; // Convert ms to seconds
+    
+    // Update display
+    document.getElementById('kickAttackValue').textContent = document.getElementById('kickAttack').value + 'ms';
+    
+    // Update bass drum envelope if it exists
+    if (toneBassDrum) {
+        toneBassDrum.envelope.attack = kickAttackValue;
+    }
+    
+    // Save settings
+    setCookie('kickAttack', document.getElementById('kickAttack').value);
+}
+
+/**
+ * Update ducking parameters from UI controls
+ */
+function updateDuckingParameters() {
+    // Update ducking values
+    duckingAmount = document.getElementById('duckingAmount').value / 100;
+    duckingEnabled = document.getElementById('duckingEnabled').checked;
+    duckingAttack = document.getElementById('duckingAttack').value / 1000; // Convert ms to seconds
+    
+    // Update displays
+    document.getElementById('duckingAmountValue').textContent = Math.round(duckingAmount * 100) + '%';
+    document.getElementById('duckingAttackValue').textContent = document.getElementById('duckingAttack').value + 'ms';
+    
+    // Save settings
+    setCookie('duckingAmount', document.getElementById('duckingAmount').value);
+    setCookie('duckingEnabled', duckingEnabled);
+    setCookie('duckingAttack', document.getElementById('duckingAttack').value);
+}
+
+/**
+ * Update melody effect displays
+ */
+function updateMelodyEffectDisplays() {
+    const melodyReverbMix = document.getElementById('melodyReverbMix').value;
+    const melodyDelayTime = document.getElementById('melodyDelayTime').value;
+    const melodyDelayFeedback = document.getElementById('melodyDelayFeedback').value;
+    const melodyDelayMix = document.getElementById('melodyDelayMix').value;
+    
+    document.getElementById('melodyReverbMixValue').textContent = melodyReverbMix + '%';
+    document.getElementById('melodyDelayTimeValue').textContent = (melodyDelayTime * 10) + 'ms';
+    document.getElementById('melodyDelayFeedbackValue').textContent = melodyDelayFeedback + '%';
+    document.getElementById('melodyDelayMixValue').textContent = melodyDelayMix + '%';
+}
+
+/**
+ * Update melody effects from UI controls
+ */
+function updateMelodyEffects() {
+    // Update melody effect values
+    melodyReverbMixValue = document.getElementById('melodyReverbMix').value / 100;
+    melodyDelayTimeValue = document.getElementById('melodyDelayTime').value / 100;
+    melodyDelayFeedbackValue = document.getElementById('melodyDelayFeedback').value / 100;
+    melodyDelayMixValue = document.getElementById('melodyDelayMix').value / 100;
+    
+    // Update effect parameters if using native effects
+    if (melodyDelay && !tuna) {
+        melodyDelay.delayTime.value = melodyDelayTimeValue;
+        if (melodyDelayFeedback) {
+            melodyDelayFeedback.gain.value = melodyDelayFeedbackValue;
+        }
+    }
+    
+    // Update Tone.js effects if initialized
+    updateToneEffectsParameters();
+    
+    // Update displays
+    updateMelodyEffectDisplays();
+    
+    // Save settings to cookies
+    saveSettings();
+}
+
+/**
+ * Update filter parameter displays
+ */
+function updateFilterDisplays() {
+    const filterCutoff = document.getElementById('filterCutoff').value;
+    const filterResonance = document.getElementById('filterResonance').value;
+    const filterEnvAmount = document.getElementById('filterEnvAmount').value;
+    const filterDecay = document.getElementById('filterDecay').value;
+    
+    document.getElementById('filterCutoffValue').textContent = filterCutoff + ' Hz';
+    document.getElementById('filterResonanceValue').textContent = filterResonance;
+    document.getElementById('filterEnvAmountValue').textContent = filterEnvAmount + '%';
+    document.getElementById('filterDecayValue').textContent = (filterDecay / 100).toFixed(1) + 's';
+}
+
+/**
+ * Update filter parameters from UI controls
+ */
+function updateFilterParameters() {
+    // Update filter values
+    filterCutoffValue = parseInt(document.getElementById('filterCutoff').value);
+    filterResonanceValue = parseInt(document.getElementById('filterResonance').value);
+    filterEnvAmountValue = document.getElementById('filterEnvAmount').value / 100;
+    filterDecayValue = document.getElementById('filterDecay').value / 100;
+    
+    // Update displays
+    updateFilterDisplays();
+    
+    // Update Tone.js instruments if initialized
+    updateToneInstrumentParameters();
+    
+    // Save settings to cookies
+    saveSettings();
+}
+
+/**
+ * Update warm pad parameter displays
+ */
+function updateWarmPadDisplays() {
+    const warmPadAttack = document.getElementById('warmPadAttack').value;
+    const warmPadDecay = document.getElementById('warmPadDecay').value;
+    const warmPadSustain = document.getElementById('warmPadSustain').value;
+    const warmPadRelease = document.getElementById('warmPadRelease').value;
+    const warmPadCutoff = document.getElementById('warmPadCutoff').value;
+    const warmPadResonance = document.getElementById('warmPadResonance').value;
+    const warmPadEnvAmount = document.getElementById('warmPadEnvAmount').value;
+    const warmPadFilterDecay = document.getElementById('warmPadFilterDecay').value;
+    
+    document.getElementById('warmPadAttackValue').textContent = (warmPadAttack / 100).toFixed(2) + 's';
+    document.getElementById('warmPadDecayValue').textContent = (warmPadDecay / 100).toFixed(2) + 's';
+    document.getElementById('warmPadSustainValue').textContent = warmPadSustain + '%';
+    document.getElementById('warmPadReleaseValue').textContent = (warmPadRelease / 100).toFixed(1) + 's';
+    document.getElementById('warmPadCutoffValue').textContent = warmPadCutoff + ' Hz';
+    document.getElementById('warmPadResonanceValue').textContent = warmPadResonance;
+    document.getElementById('warmPadEnvAmountValue').textContent = warmPadEnvAmount + '%';
+    document.getElementById('warmPadFilterDecayValue').textContent = (warmPadFilterDecay / 100).toFixed(1) + 's';
+}
+
+/**
+ * Update ethereal strings parameter displays
+ */
+function updateEtherealStringsDisplays() {
+    const etherealStringsAttack = document.getElementById('etherealStringsAttack').value;
+    const etherealStringsDecay = document.getElementById('etherealStringsDecay').value;
+    const etherealStringsSustain = document.getElementById('etherealStringsSustain').value;
+    const etherealStringsRelease = document.getElementById('etherealStringsRelease').value;
+    const etherealStringsCutoff = document.getElementById('etherealStringsCutoff').value;
+    const etherealStringsResonance = document.getElementById('etherealStringsResonance').value;
+    const etherealStringsEnvAmount = document.getElementById('etherealStringsEnvAmount').value;
+    const etherealStringsFilterDecay = document.getElementById('etherealStringsFilterDecay').value;
+    
+    document.getElementById('etherealStringsAttackValue').textContent = (etherealStringsAttack / 100).toFixed(1) + 's';
+    document.getElementById('etherealStringsDecayValue').textContent = (etherealStringsDecay / 100).toFixed(1) + 's';
+    document.getElementById('etherealStringsSustainValue').textContent = etherealStringsSustain + '%';
+    document.getElementById('etherealStringsReleaseValue').textContent = (etherealStringsRelease / 100).toFixed(1) + 's';
+    document.getElementById('etherealStringsCutoffValue').textContent = etherealStringsCutoff + ' Hz';
+    document.getElementById('etherealStringsResonanceValue').textContent = etherealStringsResonance;
+    document.getElementById('etherealStringsEnvAmountValue').textContent = etherealStringsEnvAmount + '%';
+    document.getElementById('etherealStringsFilterDecayValue').textContent = (etherealStringsFilterDecay / 100).toFixed(1) + 's';
+}
+
+/**
+ * Update deep bass drone parameter displays
+ */
+function updateDeepBassDisplays() {
+    const deepBassAttack = document.getElementById('deepBassAttack').value;
+    const deepBassDecay = document.getElementById('deepBassDecay').value;
+    const deepBassSustain = document.getElementById('deepBassSustain').value;
+    const deepBassRelease = document.getElementById('deepBassRelease').value;
+    const deepBassCutoff = document.getElementById('deepBassCutoff').value;
+    const deepBassResonance = document.getElementById('deepBassResonance').value;
+    const deepBassEnvAmount = document.getElementById('deepBassEnvAmount').value;
+    const deepBassFilterDecay = document.getElementById('deepBassFilterDecay').value;
+    
+    document.getElementById('deepBassAttackValue').textContent = (deepBassAttack / 100).toFixed(1) + 's';
+    document.getElementById('deepBassDecayValue').textContent = (deepBassDecay / 100).toFixed(1) + 's';
+    document.getElementById('deepBassSustainValue').textContent = deepBassSustain + '%';
+    document.getElementById('deepBassReleaseValue').textContent = (deepBassRelease / 100).toFixed(1) + 's';
+    document.getElementById('deepBassCutoffValue').textContent = deepBassCutoff + ' Hz';
+    document.getElementById('deepBassResonanceValue').textContent = deepBassResonance;
+    document.getElementById('deepBassEnvAmountValue').textContent = deepBassEnvAmount + '%';
+    document.getElementById('deepBassFilterDecayValue').textContent = (deepBassFilterDecay / 100).toFixed(1) + 's';
+}
+
+/**
+ * Update warm pad parameters from UI controls
+ */
+function updateWarmPadParameters() {
+    // Update warm pad values
+    warmPadAttackValue = document.getElementById('warmPadAttack').value / 100;
+    warmPadDecayValue = document.getElementById('warmPadDecay').value / 100;
+    warmPadSustainValue = document.getElementById('warmPadSustain').value / 100;
+    warmPadReleaseValue = document.getElementById('warmPadRelease').value / 100;
+    warmPadCutoffValue = parseInt(document.getElementById('warmPadCutoff').value);
+    warmPadResonanceValue = parseInt(document.getElementById('warmPadResonance').value);
+    warmPadEnvAmountValue = document.getElementById('warmPadEnvAmount').value / 100;
+    warmPadFilterDecayValue = document.getElementById('warmPadFilterDecay').value / 100;
+    
+    // Update displays
+    updateWarmPadDisplays();
+    
+    // Update Tone.js instruments if initialized
+    updateToneInstrumentParameters();
+    
+    // Save settings to cookies
+    saveSettings();
+}
+
+/**
+ * Update ethereal strings parameters from UI controls
+ */
+function updateEtherealStringsParameters() {
+    // Update ethereal strings values
+    etherealStringsAttackValue = document.getElementById('etherealStringsAttack').value / 100;
+    etherealStringsDecayValue = document.getElementById('etherealStringsDecay').value / 100;
+    etherealStringsSustainValue = document.getElementById('etherealStringsSustain').value / 100;
+    etherealStringsReleaseValue = document.getElementById('etherealStringsRelease').value / 100;
+    etherealStringsCutoffValue = parseInt(document.getElementById('etherealStringsCutoff').value);
+    etherealStringsResonanceValue = parseInt(document.getElementById('etherealStringsResonance').value);
+    etherealStringsEnvAmountValue = document.getElementById('etherealStringsEnvAmount').value / 100;
+    etherealStringsFilterDecayValue = document.getElementById('etherealStringsFilterDecay').value / 100;
+    
+    // Update displays
+    updateEtherealStringsDisplays();
+    
+    // Update Tone.js instruments if initialized
+    updateToneInstrumentParameters();
+    
+    // Save settings to cookies
+    saveSettings();
+}
+
+/**
+ * Update deep bass drone parameters from UI controls
+ */
+function updateDeepBassParameters() {
+    // Update deep bass values
+    deepBassAttackValue = document.getElementById('deepBassAttack').value / 100;
+    deepBassDecayValue = document.getElementById('deepBassDecay').value / 100;
+    deepBassSustainValue = document.getElementById('deepBassSustain').value / 100;
+    deepBassReleaseValue = document.getElementById('deepBassRelease').value / 100;
+    deepBassCutoffValue = parseInt(document.getElementById('deepBassCutoff').value);
+    deepBassResonanceValue = parseInt(document.getElementById('deepBassResonance').value);
+    deepBassEnvAmountValue = document.getElementById('deepBassEnvAmount').value / 100;
+    deepBassFilterDecayValue = document.getElementById('deepBassFilterDecay').value / 100;
+    
+    // Update displays
+    updateDeepBassDisplays();
+    
+    // Update Tone.js instruments if initialized
+    updateToneInstrumentParameters();
+    
+    // Save settings to cookies
+    saveSettings();
+}
+
+/**
+ * Update master effects displays
+ */
+function updateMasterEffectsDisplays() {
+    document.getElementById('masterCompThresholdValue').textContent = document.getElementById('masterCompThreshold').value + ' dB';
+    document.getElementById('masterCompRatioValue').textContent = document.getElementById('masterCompRatio').value + ':1';
+    document.getElementById('masterCompAttackValue').textContent = document.getElementById('masterCompAttack').value + 'ms';
+    document.getElementById('masterCompReleaseValue').textContent = document.getElementById('masterCompRelease').value + 'ms';
+    document.getElementById('masterLimiterThresholdValue').textContent = document.getElementById('masterLimiterThreshold').value + ' dB';
+    document.getElementById('masterLimiterReleaseValue').textContent = document.getElementById('masterLimiterRelease').value + 'ms';
+    document.getElementById('masterEQLowValue').textContent = document.getElementById('masterEQLow').value + ' dB';
+    document.getElementById('masterEQMidFreqValue').textContent = document.getElementById('masterEQMidFreq').value + ' Hz';
+    document.getElementById('masterEQMidGainValue').textContent = document.getElementById('masterEQMidGain').value + ' dB';
+    document.getElementById('masterEQHighValue').textContent = document.getElementById('masterEQHigh').value + ' dB';
+    document.getElementById('masterStereoWidthValue').textContent = document.getElementById('masterStereoWidth').value + '%';
+    document.getElementById('masterReverbMixValue').textContent = document.getElementById('masterReverbMix').value + '%';
+    document.getElementById('masterReverbRoomValue').textContent = document.getElementById('masterReverbRoom').value + '%';
+    document.getElementById('masterReverbDampingValue').textContent = document.getElementById('masterReverbDamping').value + '%';
+}
+
+/**
+ * Update master effects from UI controls
+ */
+function updateMasterEffects() {
+    // Update values
+    masterCompThresholdValue = parseInt(document.getElementById('masterCompThreshold').value);
+    masterCompRatioValue = parseInt(document.getElementById('masterCompRatio').value);
+    masterCompAttackValue = document.getElementById('masterCompAttack').value / 1000; // Convert ms to seconds
+    masterCompReleaseValue = document.getElementById('masterCompRelease').value / 1000;
+    masterLimiterThresholdValue = parseInt(document.getElementById('masterLimiterThreshold').value);
+    masterLimiterReleaseValue = document.getElementById('masterLimiterRelease').value / 1000;
+    masterEQLowValue = parseInt(document.getElementById('masterEQLow').value);
+    masterEQMidFreqValue = parseInt(document.getElementById('masterEQMidFreq').value);
+    masterEQMidGainValue = parseInt(document.getElementById('masterEQMidGain').value);
+    masterEQHighValue = parseInt(document.getElementById('masterEQHigh').value);
+    masterStereoWidthValue = document.getElementById('masterStereoWidth').value / 100;
+    masterReverbMixValue = document.getElementById('masterReverbMix').value / 100;
+    masterReverbRoomValue = document.getElementById('masterReverbRoom').value / 100;
+    masterReverbDampingValue = document.getElementById('masterReverbDamping').value / 100;
+    
+    // Update displays
+    updateMasterEffectsDisplays();
+    
+    // Update Tone.js master effects if initialized
+    if (window.masterEffects) {
+        if (window.masterEffects.compressor) {
+            window.masterEffects.compressor.threshold.value = masterCompThresholdValue;
+            window.masterEffects.compressor.ratio.value = masterCompRatioValue;
+            window.masterEffects.compressor.attack.value = masterCompAttackValue;
+            window.masterEffects.compressor.release.value = masterCompReleaseValue;
+        }
+        if (window.masterEffects.limiter) {
+            window.masterEffects.limiter.threshold.value = masterLimiterThresholdValue;
+        }
+        if (window.masterEffects.eq) {
+            window.masterEffects.eq.low.value = masterEQLowValue;
+            window.masterEffects.eq.mid.value = masterEQMidGainValue;
+            window.masterEffects.eq.high.value = masterEQHighValue;
+        }
+        if (window.masterEffects.stereoWidener) {
+            window.masterEffects.stereoWidener.width.value = masterStereoWidthValue;
+        }
+        if (window.masterEffects.reverb) {
+            window.masterEffects.reverb.wet.value = masterReverbMixValue;
+        }
+    }
+    
+    // Save settings to cookies
+    saveSettings();
+}
+
+/**
+ * Play a random audio stream
+ */
+async function playRandomClip() {
+    try {
+        // Stop current audio if exists
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.src = '';
+            if (mediaSource) {
+                mediaSource.disconnect();
+                mediaSource = null;
+            }
+            currentAudio = null;
+        }
+        
+        // Choose a random stream and duration
+        const randomStream = streams[Math.floor(Math.random() * streams.length)];
+        currentClipDuration = Math.floor(Math.random() * 11) + 10; // Random 10-20 seconds
+        updateStatus(`Loading stream: ${randomStream}`);
+        
+        // Create audio element
+        currentAudio = new Audio();
+        currentAudio.crossOrigin = "anonymous";
+        currentAudio.src = randomStream;
+        
+        // Wait for audio to be ready
+        await new Promise((resolve, reject) => {
+            currentAudio.addEventListener('canplay', resolve, { once: true });
+            currentAudio.addEventListener('error', reject, { once: true });
+            
+            // Set a timeout in case the stream doesn't load
+            setTimeout(() => reject(new Error('Timeout')), 5000);
+        });
+        
+        // Create media source and connect through effects
+        mediaSource = audioContext.createMediaElementSource(currentAudio);
+        
+        // Play through Web Audio effects
+        await playStreamWithEffects(mediaSource, randomStream);
+        
+        // Start playing
+        currentAudio.play();
+        
+    } catch (error) {
+        console.error('Error playing stream:', error);
+        updateStatus(`Error loading stream`);
+        scheduleNextClip();
+    }
+}
+
+/**
+ * Play a stream with effects applied using Web Audio API
+ */
+async function playStreamWithEffects(source, streamName) {
+    console.log('playStreamWithEffects called for:', streamName);
+    
+    try {
+        // Create simple effects chain with Web Audio API
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 0; // Start at 0 for fade in
+        
+        // Create delay
+        const delay = audioContext.createDelay(1.0);
+        delay.delayTime.value = delayTimeValue;
+        
+        const delayGain = audioContext.createGain();
+        delayGain.gain.value = delayMixValue;
+        
+        const delayFeedbackGain = audioContext.createGain();
+        delayFeedbackGain.gain.value = delayFeedbackValue;
+        
+        // Create reverb using convolver (simplified)
+        const wetGain = audioContext.createGain();
+        wetGain.gain.value = reverbMixValue;
+        
+        const dryGain = audioContext.createGain();
+        dryGain.gain.value = 1 - reverbMixValue;
+        
+        // Connect the effects chain
+        source.connect(gainNode);
+        
+        // Dry path
+        gainNode.connect(dryGain);
+        dryGain.connect(masterGain);
+        
+        // Delay path
+        gainNode.connect(delay);
+        delay.connect(delayGain);
+        delay.connect(delayFeedbackGain);
+        delayFeedbackGain.connect(delay);
+        delayGain.connect(masterGain);
+        
+        // Wet path (simplified reverb)
+        gainNode.connect(wetGain);
+        wetGain.connect(masterGain);
+        
+        console.log('Connected stream to effects chain');
+        updateStatus(`Playing stream for ${currentClipDuration}s`);
+        
+        // Fade in over 2 seconds
+        gainNode.gain.linearRampToValueAtTime(clipVolumeValue, audioContext.currentTime + 2);
+        
+        // Schedule fade out (4 seconds before clip ends)
+        setTimeout(() => {
+            if (currentAudio && !currentAudio.paused) {
+                gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 4);
+            }
+        }, (currentClipDuration - 4) * 1000);
+        
+        // Stop after clip duration
+        setTimeout(() => {
+            if (currentAudio) {
+                currentAudio.pause();
+                gainNode.gain.value = 0; // Reset gain for next clip
+            }
+            scheduleNextClip();
+        }, currentClipDuration * 1000);
+        
+    } catch (error) {
+        console.error('Error playing stream:', error);
+        updateStatus('Error playing stream');
+        scheduleNextClip();
+    }
+}
+
+/**
+ * Schedule the next clip to play at a random interval
+ */
+function scheduleNextClip() {
+    const delay = Math.random() * (clipMaxDelay - clipMinDelay) + clipMinDelay;
+    console.log(`Scheduling next clip in ${delay.toFixed(1)}s`);
+    setTimeout(() => {
+        if (isPlaying) {
+            playRandomClip();
+        }
+    }, delay * 1000);
+}
+
+/**
+ * Update status message in UI
+ */
+function updateStatus(message) {
+    document.getElementById('status').textContent = message;
+}
+
+/**
+ * Toggle audio playback on/off
+ */
+async function togglePlay() {
+    const button = document.getElementById('playButton');
+    
+    if (!isPlaying) {
+        // Start playing
+        if (!audioContext) {
+            await initAudio();
+        }
+        
+        isPlaying = true;
+        button.textContent = 'Stop Audio';
+        button.classList.add('playing');
+        updateStatus('Playing ambient noise');
+        
+        // Start wave effect if enabled
+        if (waveEffectEnabled) {
+            startWaveEffect();
+        }
+        
+        // Start playing clips after a short delay
+        setTimeout(() => {
+            if (isPlaying) {
+                playRandomClip();
+            }
+        }, 5000);
+        
+        // Ensure Tone.js context is running
+        if (Tone.context.state !== 'running') {
+            Tone.context.resume();
+        }
+        
+        // Start heartbeat rhythm
+        startHeartbeatRhythm();
+        
+        // Start playing melodies (synced to beat)
+        setTimeout(() => {
+            if (isPlaying) {
+                scheduleMelodyOnBeat();
+            }
+        }, 2000);
+        
+    } else {
+        // Stop playing
+        isPlaying = false;
+        button.textContent = 'Start Audio';
+        button.classList.remove('playing');
+        updateStatus('Audio stopped');
+        
+        // Stop current audio stream
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.src = '';
+            if (mediaSource) {
+                mediaSource.disconnect();
+                mediaSource = null;
+            }
+            currentAudio = null;
+        }
+        
+        // Stop heartbeat rhythm
+        stopHeartbeatRhythm();
+        
+        // Clean up audio context
+        if (audioContext) {
+            audioContext.close();
+            audioContext = null;
+        }
+    }
+}
+
+/**
+ * Start recording audio
+ */
+async function startRecording() {
+    if (!audioContext) {
+        updateStatus('Please start audio before recording');
+        return;
+    }
+    
+    try {
+        // Create a destination node to capture all audio
+        const dest = audioContext.createMediaStreamDestination();
+        
+        // Connect master gain to the destination
+        if (masterGain) {
+            masterGain.connect(dest);
+        }
+        
+        // Also connect Tone.js master output
+        Tone.connect(Tone.Destination, dest);
+        
+        // Create MediaRecorder
+        mediaRecorder = new MediaRecorder(dest.stream, {
+            mimeType: 'audio/webm'
+        });
+        
+        recordedChunks = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+            }
+        };
+        
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+            const audioUrl = URL.createObjectURL(blob);
+            
+            // Show recording results
+            document.getElementById('recordingResults').style.display = 'block';
+            document.getElementById('recordingPlayback').src = audioUrl;
+            
+            // Calculate duration
+            const duration = (Date.now() - recordingStartTime) / 1000;
+            const minutes = Math.floor(duration / 60);
+            const seconds = Math.floor(duration % 60);
+            document.getElementById('recordingDuration').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Store blob for download
+            window.recordedBlob = blob;
+        };
+        
+        // Start recording
+        mediaRecorder.start();
+        recordingStartTime = Date.now();
+        
+        // Update UI
+        document.getElementById('recordButton').textContent = 'Stop Recording';
+        document.getElementById('recordButton').classList.add('recording');
+        document.getElementById('recordingStatus').style.display = 'flex';
+        document.getElementById('recordingResults').style.display = 'none';
+        
+        // Start timer
+        recordingInterval = setInterval(updateRecordingTime, 100);
+        
+        updateStatus('Recording started');
+        
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        updateStatus('Error starting recording: ' + error.message);
+    }
+}
+
+/**
+ * Stop recording audio
+ */
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        
+        // Clear timer
+        if (recordingInterval) {
+            clearInterval(recordingInterval);
+            recordingInterval = null;
+        }
+        
+        // Update UI
+        document.getElementById('recordButton').textContent = 'Start Recording';
+        document.getElementById('recordButton').classList.remove('recording');
+        document.getElementById('recordingStatus').style.display = 'none';
+        
+        updateStatus('Recording stopped');
+    }
+}
+
+/**
+ * Update recording time display
+ */
+function updateRecordingTime() {
+    if (recordingStartTime) {
+        const elapsed = (Date.now() - recordingStartTime) / 1000;
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = Math.floor(elapsed % 60);
+        document.getElementById('recordingTime').textContent = 
+            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+}
+
+/**
+ * Download recorded audio
+ */
+function downloadRecording() {
+    if (window.recordedBlob) {
+        const url = URL.createObjectURL(window.recordedBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ambient-mix-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+}
+
+/**
+ * Reset recording UI for new recording
+ */
+function newRecording() {
+    document.getElementById('recordingResults').style.display = 'none';
+    document.getElementById('recordingPlayback').src = '';
+    if (window.recordedBlob) {
+        URL.revokeObjectURL(document.getElementById('recordingPlayback').src);
+        window.recordedBlob = null;
+    }
+}
+
+/**
+ * Switch between tabs
+ */
+function switchTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.tab-button').forEach(button => {
+        if (button.dataset.tab === tabName) {
+            button.classList.add('active');
+        } else {
+            button.classList.remove('active');
+        }
+    });
+    
+    // Update tab panels
+    document.querySelectorAll('.tab-panel').forEach(panel => {
+        if (panel.id === `${tabName}-tab`) {
+            panel.classList.add('active');
+        } else {
+            panel.classList.remove('active');
+        }
+    });
+}
+
+/**
+ * Switch between instruments
+ */
+function switchInstrument(instrumentName) {
+    // Update instrument buttons
+    document.querySelectorAll('.instrument-button').forEach(button => {
+        if (button.dataset.instrument === instrumentName) {
+            button.classList.add('active');
+        } else {
+            button.classList.remove('active');
+        }
+    });
+    
+    // Update instrument control panels
+    document.querySelectorAll('.instrument-controls').forEach(panel => {
+        panel.style.display = 'none';
+    });
+    
+    const controlsMap = {
+        'cinematic': 'cinematicControls',
+        'warm': 'warmControls',
+        'ethereal': 'etherealControls',
+        'deep': 'deepControls'
+    };
+    
+    const controlsId = controlsMap[instrumentName];
+    if (controlsId) {
+        const controls = document.getElementById(controlsId);
+        if (controls) {
+            controls.style.display = 'block';
+        }
+    }
+}
+
+/**
+ * Initialize range sliders
+ */
+function initializeRangeSliders() {
+    console.log('=== initializeRangeSliders called ===');
+    console.log('Current masterReverbMix value:', document.getElementById('masterReverbMix').value);
+    let isInitializing = true;
+    
+    // Melody timing slider
+    const melodySlider = document.getElementById('melodyTimingSlider');
+    if (melodySlider && typeof noUiSlider !== 'undefined') {
+        noUiSlider.create(melodySlider, {
+            start: [melodyMinDelay, melodyMaxDelay],
+            connect: true,
+            range: {
+                'min': 5,
+                'max': 120
+            },
+            step: 5,
+            tooltips: [true, true],
+            format: {
+                to: function (value) {
+                    return Math.round(value) + 's';
+                },
+                from: function (value) {
+                    return Number(value.replace('s', ''));
+                }
+            }
+        });
+        
+        melodySlider.noUiSlider.on('update', function (values, handle) {
+            const min = parseInt(values[0]);
+            const max = parseInt(values[1]);
+            melodyMinDelay = min;
+            melodyMaxDelay = max;
+            document.getElementById('melodyTimingValue').textContent = `${min}s - ${max}s`;
+            if (!isInitializing) {
+                saveSettings();
+            }
+        });
+    }
+    
+    // Clip timing slider
+    const clipSlider = document.getElementById('clipTimingSlider');
+    if (clipSlider && typeof noUiSlider !== 'undefined') {
+        noUiSlider.create(clipSlider, {
+            start: [clipMinDelay, clipMaxDelay],
+            connect: true,
+            range: {
+                'min': 5,
+                'max': 120
+            },
+            step: 5,
+            tooltips: [true, true],
+            format: {
+                to: function (value) {
+                    return Math.round(value) + 's';
+                },
+                from: function (value) {
+                    return Number(value.replace('s', ''));
+                }
+            }
+        });
+        
+        clipSlider.noUiSlider.on('update', function (values, handle) {
+            const min = parseInt(values[0]);
+            const max = parseInt(values[1]);
+            clipMinDelay = min;
+            clipMaxDelay = max;
+            document.getElementById('clipTimingValue').textContent = `${min}s - ${max}s`;
+            if (!isInitializing) {
+                saveSettings();
+            }
+        });
+    }
+    
+    // Mark initialization as complete after a short delay
+    setTimeout(() => {
+        isInitializing = false;
+    }, 100);
+}
+
+/**
+ * Initialize event listeners when DOM is ready
+ */
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize range sliders
+    initializeRangeSliders();
+    
+    // Tab navigation
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', () => {
+            switchTab(button.dataset.tab);
+        });
+    });
+    
+    // Instrument selection
+    document.querySelectorAll('.instrument-button').forEach(button => {
+        button.addEventListener('click', () => {
+            switchInstrument(button.dataset.instrument);
+        });
+    });
+    
+    // Noise volume controls
+    document.getElementById('whiteNoise').addEventListener('input', updateVolumes);
+    document.getElementById('pinkNoise').addEventListener('input', updateVolumes);
+    document.getElementById('brownNoise').addEventListener('input', updateVolumes);
+    
+    // Effect controls
+    document.getElementById('clipVolume').addEventListener('input', updateEffects);
+    document.getElementById('reverbMix').addEventListener('input', updateEffects);
+    document.getElementById('delayTime').addEventListener('input', updateEffects);
+    document.getElementById('delayFeedback').addEventListener('input', updateEffects);
+    document.getElementById('delayMix').addEventListener('input', updateEffects);
+    
+    // Wave effect control
+    document.getElementById('waveEffect').addEventListener('change', toggleWaveEffect);
+    
+    // Melody controls
+    document.getElementById('melodyVolume').addEventListener('input', updateMelodyParameters);
+    document.getElementById('bassVolume').addEventListener('input', updateMelodyParameters);
+    document.getElementById('melodyAttack').addEventListener('input', updateMelodyParameters);
+    document.getElementById('melodyDecay').addEventListener('input', updateMelodyParameters);
+    document.getElementById('melodySustain').addEventListener('input', updateMelodyParameters);
+    document.getElementById('melodyRelease').addEventListener('input', updateMelodyParameters);
+    
+    // Heartbeat controls
+    document.getElementById('heartbeatVolume').addEventListener('input', updateHeartbeatParameters);
+    document.getElementById('heartbeatBPM').addEventListener('input', updateHeartbeatParameters);
+    document.getElementById('kickAttack').addEventListener('input', updateKickParameters);
+    document.getElementById('duckingAmount').addEventListener('input', updateDuckingParameters);
+    document.getElementById('duckingEnabled').addEventListener('change', updateDuckingParameters);
+    document.getElementById('duckingAttack').addEventListener('input', updateDuckingParameters);
+    
+    // Scale selection checkboxes
+    document.getElementById('scalePentatonic').addEventListener('change', updateEnabledScales);
+    document.getElementById('scaleMajor').addEventListener('change', updateEnabledScales);
+    document.getElementById('scaleMinor').addEventListener('change', updateEnabledScales);
+    document.getElementById('scaleDorian').addEventListener('change', updateEnabledScales);
+    
+    // Composer selection checkboxes
+    document.getElementById('composerMozart').addEventListener('change', updateEnabledComposers);
+    document.getElementById('composerDebussy').addEventListener('change', updateEnabledComposers);
+    document.getElementById('composerSweelinck').addEventListener('change', updateEnabledComposers);
+    document.getElementById('composerAphexTwin').addEventListener('change', updateEnabledComposers);
+    document.getElementById('composerCage').addEventListener('change', updateEnabledComposers);
+    document.getElementById('composerReich').addEventListener('change', updateEnabledComposers);
+    document.getElementById('composerGlass').addEventListener('change', updateEnabledComposers);
+    document.getElementById('composerRichter').addEventListener('change', updateEnabledComposers);
+    document.getElementById('composerPart').addEventListener('change', updateEnabledComposers);
+    
+    // Melody effect controls
+    document.getElementById('melodyReverbMix').addEventListener('input', updateMelodyEffects);
+    document.getElementById('melodyDelayTime').addEventListener('input', updateMelodyEffects);
+    document.getElementById('melodyDelayFeedback').addEventListener('input', updateMelodyEffects);
+    document.getElementById('melodyDelayMix').addEventListener('input', updateMelodyEffects);
+    
+    // Filter controls
+    document.getElementById('filterCutoff').addEventListener('input', updateFilterParameters);
+    document.getElementById('filterResonance').addEventListener('input', updateFilterParameters);
+    document.getElementById('filterEnvAmount').addEventListener('input', updateFilterParameters);
+    document.getElementById('filterDecay').addEventListener('input', updateFilterParameters);
+    
+    // Warm pad controls
+    document.getElementById('warmPadAttack').addEventListener('input', updateWarmPadParameters);
+    document.getElementById('warmPadDecay').addEventListener('input', updateWarmPadParameters);
+    document.getElementById('warmPadSustain').addEventListener('input', updateWarmPadParameters);
+    document.getElementById('warmPadRelease').addEventListener('input', updateWarmPadParameters);
+    document.getElementById('warmPadCutoff').addEventListener('input', updateWarmPadParameters);
+    document.getElementById('warmPadResonance').addEventListener('input', updateWarmPadParameters);
+    document.getElementById('warmPadEnvAmount').addEventListener('input', updateWarmPadParameters);
+    document.getElementById('warmPadFilterDecay').addEventListener('input', updateWarmPadParameters);
+    
+    // Ethereal strings controls
+    document.getElementById('etherealStringsAttack').addEventListener('input', updateEtherealStringsParameters);
+    document.getElementById('etherealStringsDecay').addEventListener('input', updateEtherealStringsParameters);
+    document.getElementById('etherealStringsSustain').addEventListener('input', updateEtherealStringsParameters);
+    document.getElementById('etherealStringsRelease').addEventListener('input', updateEtherealStringsParameters);
+    document.getElementById('etherealStringsCutoff').addEventListener('input', updateEtherealStringsParameters);
+    document.getElementById('etherealStringsResonance').addEventListener('input', updateEtherealStringsParameters);
+    document.getElementById('etherealStringsEnvAmount').addEventListener('input', updateEtherealStringsParameters);
+    document.getElementById('etherealStringsFilterDecay').addEventListener('input', updateEtherealStringsParameters);
+    
+    // Deep bass drone controls
+    document.getElementById('deepBassAttack').addEventListener('input', updateDeepBassParameters);
+    document.getElementById('deepBassDecay').addEventListener('input', updateDeepBassParameters);
+    document.getElementById('deepBassSustain').addEventListener('input', updateDeepBassParameters);
+    document.getElementById('deepBassRelease').addEventListener('input', updateDeepBassParameters);
+    document.getElementById('deepBassCutoff').addEventListener('input', updateDeepBassParameters);
+    document.getElementById('deepBassResonance').addEventListener('input', updateDeepBassParameters);
+    document.getElementById('deepBassEnvAmount').addEventListener('input', updateDeepBassParameters);
+    document.getElementById('deepBassFilterDecay').addEventListener('input', updateDeepBassParameters);
+    
+    // Master effects controls
+    document.getElementById('masterCompThreshold').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterCompRatio').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterCompAttack').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterCompRelease').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterLimiterThreshold').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterLimiterRelease').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterEQLow').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterEQMidFreq').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterEQMidGain').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterEQHigh').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterStereoWidth').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterReverbMix').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterReverbRoom').addEventListener('input', updateMasterEffects);
+    document.getElementById('masterReverbDamping').addEventListener('input', updateMasterEffects);
+    
+    // Play/stop button
+    document.getElementById('playButton').addEventListener('click', togglePlay);
+    
+    // Recording controls
+    document.getElementById('recordButton').addEventListener('click', () => {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    });
+    
+    document.getElementById('downloadButton').addEventListener('click', downloadRecording);
+    document.getElementById('newRecordingButton').addEventListener('click', newRecording);
+    
+    // Add collapsible functionality
+    document.querySelectorAll('.collapsible').forEach(header => {
+        header.addEventListener('click', function() {
+            this.classList.toggle('collapsed');
+            const content = this.nextElementSibling;
+            content.classList.toggle('collapsed');
+        });
+    });
+    
+    // Load saved settings from cookies with a small delay to ensure DOM is ready
+    setTimeout(() => {
+        console.log('=== BEFORE loadSettings ===');
+        console.log('masterReverbMix HTML value:', document.getElementById('masterReverbMix').value);
+        console.log('masterReverbMix default attribute:', document.getElementById('masterReverbMix').getAttribute('value'));
+        
+        loadSettings();
+        
+        console.log('=== IMMEDIATELY AFTER loadSettings ===');
+        console.log('masterReverbMix HTML value:', document.getElementById('masterReverbMix').value);
+        console.log('masterReverbMixValue variable:', masterReverbMixValue);
+        
+        // Check if wave effect is enabled and update UI accordingly
+        if (waveEffectEnabled) {
+            const noiseControls = document.getElementById('noiseControls');
+            const waveNotice = document.getElementById('waveNotice');
+            if (noiseControls) noiseControls.classList.add('disabled');
+            if (waveNotice) waveNotice.style.display = 'block';
+        }
+        
+        // Debug check after a delay to see if values are being reset
+        setTimeout(() => {
+            console.log('=== DELAYED CHECK (500ms after loadSettings) ===');
+            console.log('masterReverbMix HTML value:', document.getElementById('masterReverbMix').value);
+            console.log('masterReverbMixValue variable:', masterReverbMixValue);
+            
+            // Check if something is listening for changes
+            const slider = document.getElementById('masterReverbMix');
+            console.log('Slider event listeners:', slider.hasAttribute('oninput') ? 'has oninput' : 'no oninput');
+        }, 500);
+    }, 100);
+});

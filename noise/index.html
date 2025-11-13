@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ambient Noise Mixer</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Ambient Noise Mixer</h1>
+        
+        <div class="status" id="status">Click 'Start Audio' to begin</div>
+        
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-button active" data-tab="noise">Noise Generator</button>
+            <button class="tab-button" data-tab="melody">Melody Generator</button>
+            <button class="tab-button" data-tab="kickdrum">Kick Drum</button>
+            <button class="tab-button" data-tab="clips">Audio Clips</button>
+            <button class="tab-button" data-tab="master">Master Effects</button>
+            <button class="tab-button" data-tab="recording">Recording</button>
+        </div>
+        
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Noise Generator Tab -->
+            <div id="noise-tab" class="tab-panel active">
+                <div class="wave-effect-section">
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="waveEffect" value="wave">
+                            Beach Wave Effect
+                            <span class="tooltip">
+                                <span class="tooltiptext">Simulates ocean waves by modulating noise levels</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="noise-controls" id="noiseControls">
+                    <div class="control-group">
+                        <label for="whiteNoise" class="noise-white">White Noise</label>
+                        <input type="range" id="whiteNoise" min="0" max="20" value="6">
+                        <div class="value-display" id="whiteValue">6%</div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="pinkNoise" class="noise-pink">Pink Noise</label>
+                        <input type="range" id="pinkNoise" min="0" max="20" value="10">
+                        <div class="value-display" id="pinkValue">10%</div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="brownNoise" class="noise-brown">Brown Noise</label>
+                        <input type="range" id="brownNoise" min="0" max="20" value="4">
+                        <div class="value-display" id="brownValue">4%</div>
+                    </div>
+                </div>
+                
+                <div class="wave-notice" id="waveNotice" style="display: none;">
+                    <p>🌊 Wave effect is controlling noise levels</p>
+                </div>
+            </div>
+            
+            <!-- Melody Generator Tab -->
+            <div id="melody-tab" class="tab-panel">
+                <!-- Scale and Composer Selection at the top -->
+                <div class="scale-composer-section">
+                    <div class="two-column">
+                        <div class="column">
+                            <h3>Scale Selection</h3>
+                            <div class="checkbox-group">
+                                <label>
+                                    <input type="checkbox" id="scalePentatonic" value="pentatonic">
+                                    Pentatonic
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="scaleMajor" value="major">
+                                    Major
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="scaleMinor" value="minor" checked>
+                                    Minor
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="scaleDorian" value="dorian">
+                                    Dorian
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="column">
+                            <h3>Composer Style</h3>
+                            <div class="checkbox-group scrollable">
+                                <label>
+                                    <input type="checkbox" id="composerMozart" value="mozart" checked>
+                                    Mozart
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="composerDebussy" value="debussy" checked>
+                                    Debussy
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="composerSweelinck" value="sweelinck" checked>
+                                    Sweelinck
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="composerAphexTwin" value="aphextwin" checked>
+                                    Aphex Twin
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="composerCage" value="cage" checked>
+                                    John Cage
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="composerReich" value="reich" checked>
+                                    Steve Reich
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="composerGlass" value="glass" checked>
+                                    Philip Glass
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="composerRichter" value="richter" checked>
+                                    Max Richter
+                                </label>
+                                <label>
+                                    <input type="checkbox" id="composerPart" value="part" checked>
+                                    Arvo Pärt
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Timing Control -->
+                <div class="timing-control">
+                    <h3>Melody Timing</h3>
+                    <div class="control-group">
+                        <label for="melodyTiming">Time Between Melodies (seconds)</label>
+                        <div id="melodyTimingSlider" class="range-slider"></div>
+                        <div class="value-display" id="melodyTimingValue">20s - 60s</div>
+                    </div>
+                </div>
+                
+                <!-- Volume Controls -->
+                <div class="volume-controls">
+                    <div class="control-group">
+                        <label for="melodyVolume">Melody Volume</label>
+                        <input type="range" id="melodyVolume" min="0" max="100" value="30">
+                        <div class="value-display" id="melodyVolumeValue">30%</div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="bassVolume">Bass Volume</label>
+                        <input type="range" id="bassVolume" min="0" max="100" value="40">
+                        <div class="value-display" id="bassVolumeValue">40%</div>
+                    </div>
+                </div>
+                
+                <!-- Instrument Selector -->
+                <div class="instrument-selector">
+                    <h3>Select Instrument</h3>
+                    <div class="instrument-grid">
+                        <button class="instrument-button active" data-instrument="cinematic">Cinematic Keys</button>
+                        <button class="instrument-button" data-instrument="warm">Warm Pad</button>
+                        <button class="instrument-button" data-instrument="ethereal">Ethereal Strings</button>
+                        <button class="instrument-button" data-instrument="deep">Deep Bass Drone</button>
+                    </div>
+                </div>
+                
+                <!-- Instrument-specific ADSR controls -->
+                <h3 class="collapsible">Instrument ADSR & Filter</h3>
+                <div class="effects-section collapsible-content">
+                    <!-- Cinematic Keys Controls -->
+                    <div class="instrument-controls" id="cinematicControls">
+                        <h4>Cinematic Keys</h4>
+                        <div class="adsr-grid">
+                            <div class="control-group">
+                                <label for="melodyAttack">Attack</label>
+                                <input type="range" id="melodyAttack" min="0" max="100" value="10">
+                                <div class="value-display" id="melodyAttackValue">0.1s</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="melodyDecay">Decay</label>
+                                <input type="range" id="melodyDecay" min="0" max="100" value="20">
+                                <div class="value-display" id="melodyDecayValue">0.2s</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="melodySustain">Sustain</label>
+                                <input type="range" id="melodySustain" min="0" max="100" value="30">
+                                <div class="value-display" id="melodySustainValue">30%</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="melodyRelease">Release</label>
+                                <input type="range" id="melodyRelease" min="0" max="200" value="150">
+                                <div class="value-display" id="melodyReleaseValue">1.5s</div>
+                            </div>
+                        </div>
+                        
+                        <h4>Filter</h4>
+                        <div class="filter-grid">
+                            <div class="control-group">
+                                <label for="filterCutoff">Cutoff</label>
+                                <input type="range" id="filterCutoff" min="100" max="8000" value="2000">
+                                <div class="value-display" id="filterCutoffValue">2000 Hz</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="filterResonance">Resonance</label>
+                                <input type="range" id="filterResonance" min="0" max="30" value="8">
+                                <div class="value-display" id="filterResonanceValue">8</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="filterEnvAmount">Envelope Amount</label>
+                                <input type="range" id="filterEnvAmount" min="0" max="100" value="90">
+                                <div class="value-display" id="filterEnvAmountValue">90%</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="filterDecay">Filter Decay</label>
+                                <input type="range" id="filterDecay" min="0" max="200" value="50">
+                                <div class="value-display" id="filterDecayValue">0.5s</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Warm Pad Controls -->
+                    <div class="instrument-controls" id="warmControls" style="display: none;">
+                        <h4>Warm Pad</h4>
+                        <div class="adsr-grid">
+                            <div class="control-group">
+                                <label for="warmPadAttack">Attack</label>
+                                <input type="range" id="warmPadAttack" min="0" max="200" value="15">
+                                <div class="value-display" id="warmPadAttackValue">0.15s</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="warmPadDecay">Decay</label>
+                                <input type="range" id="warmPadDecay" min="0" max="200" value="30">
+                                <div class="value-display" id="warmPadDecayValue">0.3s</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="warmPadSustain">Sustain</label>
+                                <input type="range" id="warmPadSustain" min="0" max="100" value="40">
+                                <div class="value-display" id="warmPadSustainValue">40%</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="warmPadRelease">Release</label>
+                                <input type="range" id="warmPadRelease" min="0" max="300" value="200">
+                                <div class="value-display" id="warmPadReleaseValue">2.0s</div>
+                            </div>
+                        </div>
+                        
+                        <h4>Filter</h4>
+                        <div class="filter-grid">
+                            <div class="control-group">
+                                <label for="warmPadCutoff">Cutoff</label>
+                                <input type="range" id="warmPadCutoff" min="100" max="4000" value="800">
+                                <div class="value-display" id="warmPadCutoffValue">800 Hz</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="warmPadResonance">Resonance</label>
+                                <input type="range" id="warmPadResonance" min="0" max="20" value="2">
+                                <div class="value-display" id="warmPadResonanceValue">2</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="warmPadEnvAmount">Envelope Amount</label>
+                                <input type="range" id="warmPadEnvAmount" min="0" max="100" value="70">
+                                <div class="value-display" id="warmPadEnvAmountValue">70%</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="warmPadFilterDecay">Filter Decay</label>
+                                <input type="range" id="warmPadFilterDecay" min="0" max="200" value="60">
+                                <div class="value-display" id="warmPadFilterDecayValue">0.6s</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Ethereal Strings Controls -->
+                    <div class="instrument-controls" id="etherealControls" style="display: none;">
+                        <h4>Ethereal Strings</h4>
+                        <div class="adsr-grid">
+                            <div class="control-group">
+                                <label for="etherealStringsAttack">Attack</label>
+                                <input type="range" id="etherealStringsAttack" min="0" max="200" value="50">
+                                <div class="value-display" id="etherealStringsAttackValue">0.5s</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="etherealStringsDecay">Decay</label>
+                                <input type="range" id="etherealStringsDecay" min="0" max="200" value="40">
+                                <div class="value-display" id="etherealStringsDecayValue">0.4s</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="etherealStringsSustain">Sustain</label>
+                                <input type="range" id="etherealStringsSustain" min="0" max="100" value="70">
+                                <div class="value-display" id="etherealStringsSustainValue">70%</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="etherealStringsRelease">Release</label>
+                                <input type="range" id="etherealStringsRelease" min="0" max="500" value="300">
+                                <div class="value-display" id="etherealStringsReleaseValue">3.0s</div>
+                            </div>
+                        </div>
+                        
+                        <h4>Filter</h4>
+                        <div class="filter-grid">
+                            <div class="control-group">
+                                <label for="etherealStringsCutoff">Cutoff</label>
+                                <input type="range" id="etherealStringsCutoff" min="100" max="5000" value="1200">
+                                <div class="value-display" id="etherealStringsCutoffValue">1200 Hz</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="etherealStringsResonance">Resonance</label>
+                                <input type="range" id="etherealStringsResonance" min="0" max="20" value="1">
+                                <div class="value-display" id="etherealStringsResonanceValue">1</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="etherealStringsEnvAmount">Envelope Amount</label>
+                                <input type="range" id="etherealStringsEnvAmount" min="0" max="100" value="50">
+                                <div class="value-display" id="etherealStringsEnvAmountValue">50%</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="etherealStringsFilterDecay">Filter Decay</label>
+                                <input type="range" id="etherealStringsFilterDecay" min="0" max="200" value="100">
+                                <div class="value-display" id="etherealStringsFilterDecayValue">1.0s</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Deep Bass Drone Controls -->
+                    <div class="instrument-controls" id="deepControls" style="display: none;">
+                        <h4>Deep Bass Drone</h4>
+                        <div class="adsr-grid">
+                            <div class="control-group">
+                                <label for="deepBassAttack">Attack</label>
+                                <input type="range" id="deepBassAttack" min="0" max="200" value="80">
+                                <div class="value-display" id="deepBassAttackValue">0.8s</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="deepBassDecay">Decay</label>
+                                <input type="range" id="deepBassDecay" min="0" max="200" value="50">
+                                <div class="value-display" id="deepBassDecayValue">0.5s</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="deepBassSustain">Sustain</label>
+                                <input type="range" id="deepBassSustain" min="0" max="100" value="80">
+                                <div class="value-display" id="deepBassSustainValue">80%</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="deepBassRelease">Release</label>
+                                <input type="range" id="deepBassRelease" min="0" max="500" value="400">
+                                <div class="value-display" id="deepBassReleaseValue">4.0s</div>
+                            </div>
+                        </div>
+                        
+                        <h4>Filter</h4>
+                        <div class="filter-grid">
+                            <div class="control-group">
+                                <label for="deepBassCutoff">Cutoff</label>
+                                <input type="range" id="deepBassCutoff" min="50" max="2000" value="400">
+                                <div class="value-display" id="deepBassCutoffValue">400 Hz</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="deepBassResonance">Resonance</label>
+                                <input type="range" id="deepBassResonance" min="0" max="20" value="3">
+                                <div class="value-display" id="deepBassResonanceValue">3</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="deepBassEnvAmount">Envelope Amount</label>
+                                <input type="range" id="deepBassEnvAmount" min="0" max="100" value="40">
+                                <div class="value-display" id="deepBassEnvAmountValue">40%</div>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="deepBassFilterDecay">Filter Decay</label>
+                                <input type="range" id="deepBassFilterDecay" min="0" max="300" value="150">
+                                <div class="value-display" id="deepBassFilterDecayValue">1.5s</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Melody Effects -->
+                <h3 class="collapsible">Melody Effects</h3>
+                <div class="effects-section collapsible-content">
+                    <div class="effects-grid">
+                        <div class="control-group">
+                            <label for="melodyReverbMix">Reverb Mix</label>
+                            <input type="range" id="melodyReverbMix" min="0" max="100" value="50">
+                            <div class="value-display" id="melodyReverbMixValue">50%</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="melodyDelayTime">Delay Time</label>
+                            <input type="range" id="melodyDelayTime" min="0" max="100" value="30">
+                            <div class="value-display" id="melodyDelayTimeValue">300ms</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="melodyDelayFeedback">Delay Feedback</label>
+                            <input type="range" id="melodyDelayFeedback" min="0" max="90" value="30">
+                            <div class="value-display" id="melodyDelayFeedbackValue">30%</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="melodyDelayMix">Delay Mix</label>
+                            <input type="range" id="melodyDelayMix" min="0" max="100" value="40">
+                            <div class="value-display" id="melodyDelayMixValue">40%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Kick Drum Tab -->
+            <div id="kickdrum-tab" class="tab-panel">
+                <div class="volume-control">
+                    <h3>Kick Drum Settings</h3>
+                    <div class="control-group">
+                        <label for="heartbeatVolume">Heartbeat Volume</label>
+                        <input type="range" id="heartbeatVolume" min="0" max="100" value="50">
+                        <div class="value-display" id="heartbeatVolumeValue">50%</div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="heartbeatBPM">Heartbeat BPM</label>
+                        <input type="range" id="heartbeatBPM" min="40" max="100" value="60">
+                        <div class="value-display" id="heartbeatBPMValue">60 BPM</div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="kickAttack">Kick Attack</label>
+                        <input type="range" id="kickAttack" min="0" max="50" value="1">
+                        <div class="value-display" id="kickAttackValue">1ms</div>
+                    </div>
+                </div>
+                
+                <div class="effects-section">
+                    <h3>Ducking Effect</h3>
+                    <div class="control-group">
+                        <label for="duckingAmount">Ducking Amount</label>
+                        <input type="range" id="duckingAmount" min="0" max="100" value="50">
+                        <div class="value-display" id="duckingAmountValue">50%</div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="duckingAttack">Ducking Attack</label>
+                        <input type="range" id="duckingAttack" min="0" max="100" value="5">
+                        <div class="value-display" id="duckingAttackValue">5ms</div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="duckingEnabled" checked>
+                            Enable Ducking
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Audio Clips Tab -->
+            <div id="clips-tab" class="tab-panel">
+                <!-- Stream Selection -->
+                <div class="stream-selection">
+                    <h3>Available Streams</h3>
+                    <div class="stream-list">
+                        <label class="stream-item">
+                            <input type="checkbox" id="stream0" value="0" checked>
+                            <span class="stream-url">Stream 1</span>
+                        </label>
+                        <label class="stream-item">
+                            <input type="checkbox" id="stream1" value="1" checked>
+                            <span class="stream-url">Stream 2</span>
+                        </label>
+                        <label class="stream-item">
+                            <input type="checkbox" id="stream2" value="2" checked>
+                            <span class="stream-url">Stream 3</span>
+                        </label>
+                        <label class="stream-item">
+                            <input type="checkbox" id="stream3" value="3" checked>
+                            <span class="stream-url">Stream 4</span>
+                        </label>
+                        <label class="stream-item">
+                            <input type="checkbox" id="stream4" value="4" checked>
+                            <span class="stream-url">Stream 5</span>
+                        </label>
+                        <label class="stream-item">
+                            <input type="checkbox" id="stream5" value="5" checked>
+                            <span class="stream-url">Stream 6</span>
+                        </label>
+                        <label class="stream-item">
+                            <input type="checkbox" id="stream6" value="6" checked>
+                            <span class="stream-url">Stream 7</span>
+                        </label>
+                    </div>
+                    <div class="stream-controls">
+                        <button id="selectAllStreams" class="secondary-button">Select All</button>
+                        <button id="deselectAllStreams" class="secondary-button">Deselect All</button>
+                    </div>
+                </div>
+                
+                <!-- Timing Control -->
+                <div class="timing-control">
+                    <h3>Clip Timing</h3>
+                    <div class="control-group">
+                        <label for="clipTiming">Time Between Clips (seconds)</label>
+                        <div id="clipTimingSlider" class="range-slider"></div>
+                        <div class="value-display" id="clipTimingValue">10s - 60s</div>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label for="clipVolume">Clip Volume</label>
+                    <input type="range" id="clipVolume" min="0" max="200" value="40">
+                    <div class="value-display" id="clipVolumeValue">40%</div>
+                </div>
+                
+                <h3>Clip Effects</h3>
+                <div class="effects-section">
+                    <div class="effects-grid">
+                        <div class="control-group">
+                            <label for="reverbMix">Reverb Mix</label>
+                            <input type="range" id="reverbMix" min="0" max="100" value="70">
+                            <div class="value-display" id="reverbMixValue">70%</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="delayTime">Delay Time</label>
+                            <input type="range" id="delayTime" min="0" max="100" value="15">
+                            <div class="value-display" id="delayTimeValue">150ms</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="delayFeedback">Delay Feedback</label>
+                            <input type="range" id="delayFeedback" min="0" max="90" value="45">
+                            <div class="value-display" id="delayFeedbackValue">45%</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="delayMix">Delay Mix</label>
+                            <input type="range" id="delayMix" min="0" max="100" value="50">
+                            <div class="value-display" id="delayMixValue">50%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Master Effects Tab -->
+            <div id="master-tab" class="tab-panel">
+                <h3>Master Compressor</h3>
+                <div class="effects-section">
+                    <div class="effects-grid">
+                        <div class="control-group">
+                            <label for="masterCompThreshold">Threshold</label>
+                            <input type="range" id="masterCompThreshold" min="-60" max="0" value="-24">
+                            <div class="value-display" id="masterCompThresholdValue">-24 dB</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterCompRatio">Ratio</label>
+                            <input type="range" id="masterCompRatio" min="1" max="20" value="4">
+                            <div class="value-display" id="masterCompRatioValue">4:1</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterCompAttack">Attack</label>
+                            <input type="range" id="masterCompAttack" min="0" max="100" value="3">
+                            <div class="value-display" id="masterCompAttackValue">3ms</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterCompRelease">Release</label>
+                            <input type="range" id="masterCompRelease" min="0" max="1000" value="250">
+                            <div class="value-display" id="masterCompReleaseValue">250ms</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3>Master Limiter</h3>
+                <div class="effects-section">
+                    <div class="effects-grid">
+                        <div class="control-group">
+                            <label for="masterLimiterThreshold">Threshold</label>
+                            <input type="range" id="masterLimiterThreshold" min="-30" max="0" value="-3">
+                            <div class="value-display" id="masterLimiterThresholdValue">-3 dB</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterLimiterRelease">Release</label>
+                            <input type="range" id="masterLimiterRelease" min="0" max="500" value="100">
+                            <div class="value-display" id="masterLimiterReleaseValue">100ms</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3>Master EQ</h3>
+                <div class="effects-section">
+                    <div class="effects-grid">
+                        <div class="control-group">
+                            <label for="masterEQLow">Low Shelf (80Hz)</label>
+                            <input type="range" id="masterEQLow" min="-12" max="12" value="0">
+                            <div class="value-display" id="masterEQLowValue">0 dB</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterEQMidFreq">Mid Frequency</label>
+                            <input type="range" id="masterEQMidFreq" min="200" max="5000" value="1000">
+                            <div class="value-display" id="masterEQMidFreqValue">1000 Hz</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterEQMidGain">Mid Gain</label>
+                            <input type="range" id="masterEQMidGain" min="-12" max="12" value="0">
+                            <div class="value-display" id="masterEQMidGainValue">0 dB</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterEQHigh">High Shelf (10kHz)</label>
+                            <input type="range" id="masterEQHigh" min="-12" max="12" value="0">
+                            <div class="value-display" id="masterEQHighValue">0 dB</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3>Spatial & Ambience</h3>
+                <div class="effects-section">
+                    <div class="effects-grid">
+                        <div class="control-group">
+                            <label for="masterStereoWidth">Stereo Width</label>
+                            <input type="range" id="masterStereoWidth" min="0" max="200" value="100">
+                            <div class="value-display" id="masterStereoWidthValue">100%</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterReverbMix">Master Reverb Mix</label>
+                            <input type="range" id="masterReverbMix" min="0" max="100" value="0">
+                            <div class="value-display" id="masterReverbMixValue">0%</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterReverbRoom">Room Size</label>
+                            <input type="range" id="masterReverbRoom" min="0" max="100" value="50">
+                            <div class="value-display" id="masterReverbRoomValue">50%</div>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="masterReverbDamping">Damping</label>
+                            <input type="range" id="masterReverbDamping" min="0" max="100" value="50">
+                            <div class="value-display" id="masterReverbDampingValue">50%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recording Tab -->
+            <div id="recording-tab" class="tab-panel">
+                <div class="recording-section">
+                    <h3>Audio Recording</h3>
+                    <p class="recording-info">Record your ambient mix and download it as a WAV file.</p>
+                    
+                    <div class="recording-controls">
+                        <button id="recordButton" class="record-button">
+                            <span class="record-icon">●</span>
+                            Start Recording
+                        </button>
+                        
+                        <div class="recording-status" id="recordingStatus" style="display: none;">
+                            <span class="recording-indicator">●</span>
+                            <span id="recordingTime">00:00</span>
+                        </div>
+                    </div>
+                    
+                    <div class="recording-results" id="recordingResults" style="display: none;">
+                        <h4>Recording Complete</h4>
+                        <div class="recording-info">
+                            <p>Duration: <span id="recordingDuration">00:00</span></p>
+                            <p>Format: WAV (48kHz, 16-bit)</p>
+                        </div>
+                        
+                        <div class="recording-actions">
+                            <audio id="recordingPlayback" controls style="width: 100%; margin: 10px 0;"></audio>
+                            <button id="downloadButton" class="download-button">Download Recording</button>
+                            <button id="newRecordingButton" class="secondary-button">New Recording</button>
+                        </div>
+                    </div>
+                    
+                    <div class="recording-tips">
+                        <h4>Tips:</h4>
+                        <ul>
+                            <li>Make sure audio is playing before recording</li>
+                            <li>Recordings capture all active sounds (noise, melodies, clips, kick drum)</li>
+                            <li>Longer recordings will create larger files</li>
+                            <li>Use the Master Effects tab to adjust the final mix before recording</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <button id="playButton">Start Audio</button>
+    </div>
+    
+    <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.1/dist/nouislider.min.js"></script>
+    <script type="module">
+        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0';
+        // Configure to use Hugging Face CDN instead of local server
+        env.remoteURL = 'https://huggingface.co/';
+        env.localURL = '';
+        env.allowRemoteModels = true;
+        env.allowLocalModels = false;
+        window.pipeline = pipeline;
+    </script>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
