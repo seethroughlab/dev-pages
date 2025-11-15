@@ -10,9 +10,18 @@ struct Uniforms {
     noiseStrength: f32,
     displacementAmount: f32,
     animationPhase: f32,
+    rippleX: f32,
+    rippleY: f32,
+    rippleTime: f32,
+    rippleStrength: f32,
+    scalePulse: f32,
+    parallaxStrength: f32,
+    padding1: f32,
+    padding2: f32,
 }
 
 struct FragmentInput {
+    @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>,
     @location(1) layerIndex: f32,
     @location(2) shapeIndex: f32,
@@ -120,68 +129,27 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
     let screenPos = input.position.xy;
 
     // Scanlines - horizontal lines across the screen
-    let scanlineFreq = 800.0; // Number of scanlines
-    let scanlineIntensity = 0.15; // How dark the lines are
+    let scanlineFreq = 600.0; // Number of scanlines
+    let scanlineIntensity = 0.25; // Moderate intensity
     let scanline = sin(screenPos.y * scanlineFreq) * scanlineIntensity + (1.0 - scanlineIntensity);
     finalColor *= scanline;
 
     // CRT curvature vignette - darker at edges
     let screenCenter = vec2<f32>(960.0, 540.0); // Approximate center for 1920x1080
     let distFromCenter = length(screenPos - screenCenter) / 1000.0;
-    let vignette = 1.0 - (distFromCenter * distFromCenter * 0.3);
+    let vignette = 1.0 - (distFromCenter * distFromCenter * 0.4);
     finalColor *= vignette;
 
-    // RGB phosphor glow - subtle color separation
-    let phosphorOffset = sin(screenPos.x * 3.0) * 0.02;
+    // RGB phosphor glow - color separation
+    let phosphorOffset = sin(screenPos.x * 2.0 + uniforms.time * 0.3) * 0.06;
     finalColor.r *= 1.0 + phosphorOffset;
     finalColor.b *= 1.0 - phosphorOffset;
 
-    // Flicker effect - very subtle
-    let flicker = sin(uniforms.time * 60.0) * 0.01 + 0.99;
+    // Flicker effect
+    let flicker = sin(uniforms.time * 60.0) * 0.03 + 0.97;
     finalColor *= flicker;
 
-    // --- VORONOI / CELLULAR PATTERN ---
-    // Subtle cellular noise overlay
-    let cellScale = 20.0;
-    let cellPos = input.worldPos * cellScale + vec2<f32>(uniforms.time * 0.1);
-    let cellNoise = voronoi(cellPos);
-    let cellPattern = smoothstep(0.4, 0.6, cellNoise) * 0.05; // Very subtle
-    finalColor += vec3<f32>(cellPattern);
-
     return vec4<f32>(finalColor, 1.0);
-}
-
-// Voronoi/cellular noise function
-fn voronoi(p: vec2<f32>) -> f32 {
-    let n = floor(p);
-    let f = fract(p);
-
-    var minDist = 1.0;
-
-    for (var j = -1; j <= 1; j++) {
-        for (var i = -1; i <= 1; i++) {
-            let neighbor = vec2<f32>(f32(i), f32(j));
-            let point = random2(n + neighbor);
-            let diff = neighbor + point - f;
-            let dist = length(diff);
-            minDist = min(minDist, dist);
-        }
-    }
-
-    return minDist;
-}
-
-// Random 2D vector from 2D input
-fn random2(p: vec2<f32>) -> vec2<f32> {
-    return fract(sin(vec2<f32>(
-        dot(p, vec2<f32>(127.1, 311.7)),
-        dot(p, vec2<f32>(269.5, 183.3))
-    )) * 43758.5453);
-}
-
-// Fract function
-fn fract(x: vec2<f32>) -> vec2<f32> {
-    return x - floor(x);
 }
 
 // Helper function for smoothstep

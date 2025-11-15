@@ -85,18 +85,16 @@ class App {
             // Setup ripple effects on click
             this.setupRippleEffects();
 
-            // Enable parallax effect
-            const uniforms = this.renderer.getUniforms();
-            uniforms.setParallaxStrength(0.15); // Enable parallax
-
             // Initialize audio system (but don't start until user interaction)
             this.audioSystem = new AudioSystem();
 
             // Setup audio initialization on first user interaction
             this.setupAudioInitialization();
 
-            // Connect animation events to audio
+            // Connect animation events to audio and effects
             const uniforms = this.renderer.getUniforms();
+            uniforms.setParallaxStrength(0.25); // Enable parallax - move mouse to see layers shift
+
             uniforms.on('*', (eventType, data) => {
                 if (this.audioSystem) {
                     this.audioSystem.onAnimationEvent(eventType, data);
@@ -134,6 +132,21 @@ class App {
                 );
                 await this.mouseMelody.initialize();
                 this.mouseMelody.start();
+
+                // Setup visual sync for note playback
+                this.mouseMelody.onNotePlayed((frequency, normalizedY) => {
+                    // Pulse the logo when notes are played
+                    const uniforms = this.renderer.getUniforms();
+                    const pulseTo = 1.0 + (1.0 - normalizedY) * 0.12; // Pulse based on pitch (increased from 0.05)
+
+                    // Quick pulse and return
+                    uniforms.setScalePulse(pulseTo);
+                    setTimeout(() => {
+                        if (this.renderer) {
+                            uniforms.setScalePulse(1.0);
+                        }
+                    }, 150); // Slightly longer pulse
+                });
 
                 // Setup mouse tracking for melody
                 this.setupMouseMelody();

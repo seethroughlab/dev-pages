@@ -21,11 +21,11 @@ export class ShaderUniforms {
             rippleX: 0.0,
             rippleY: 0.0,
             rippleTime: -999.0, // Negative = no active ripple
-            rippleStrength: 0.3,
+            rippleStrength: 0.8, // Increased from 0.3
             // Scale pulsing (sync to audio)
             scalePulse: 1.0,
             // Parallax strength
-            parallaxStrength: 0.0
+            parallaxStrength: 0.0 // Set in main.js to 0.15
         };
 
         // Create uniform buffer

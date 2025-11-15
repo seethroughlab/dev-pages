@@ -30,6 +30,9 @@ export class MouseMelody {
 
         // Active notes tracking
         this.activeNotes = [];
+
+        // Callback for when notes are played (for visual sync)
+        this.onNotePlayedCallback = null;
     }
 
     /**
@@ -114,6 +117,11 @@ export class MouseMelody {
             this.playNote(note.frequency, this.mouseY);
             this.lastNoteTime = now;
             this.lastTriggeredNote = note;
+
+            // Trigger callback for visual sync
+            if (this.onNotePlayedCallback) {
+                this.onNotePlayedCallback(note.frequency, this.mouseY);
+            }
         }
     }
 
@@ -246,6 +254,13 @@ export class MouseMelody {
 
         this.dryGain.gain.value = dryAmount;
         this.wetGain.gain.value = wetAmount;
+    }
+
+    /**
+     * Set callback for when notes are played (for visual sync)
+     */
+    onNotePlayed(callback) {
+        this.onNotePlayedCallback = callback;
     }
 
     /**
