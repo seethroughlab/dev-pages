@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Beat Detector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .audio-input {
+            margin-bottom: 20px;
+        }
+
+        .audio-input label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        select, button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        select {
+            background: white;
+            color: #333;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        button.stop {
+            background: #f44336;
+        }
+
+        .visualizer {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .beat-indicators {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .beat-indicator {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            transition: all 0.1s;
+        }
+
+        .beat-indicator h3 {
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .indicator-light {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 15px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.05s;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+        }
+
+        .beat-indicator.active .indicator-light {
+            box-shadow: 0 0 40px currentColor;
+            transform: scale(1.1);
+        }
+
+        .beat-indicator.kick.active .indicator-light {
+            background: #ff4444;
+        }
+
+        .beat-indicator.snare.active .indicator-light {
+            background: #44ff44;
+        }
+
+        .beat-indicator.hihat.active .indicator-light {
+            background: #4444ff;
+        }
+
+        .energy-bar {
+            height: 30px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .energy-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            transition: width 0.1s;
+            border-radius: 15px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 300px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            cursor: crosshair;
+        }
+
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Real-Time Beat Detector</h1>
+        
+        <div class="controls">
+            <div class="audio-input">
+                <label for="audioSource">Audio Input Source:</label>
+                <select id="audioSource">
+                    <option value="">Select audio source...</option>
+                </select>
+            </div>
+            
+            <button id="startBtn">Start Detection</button>
+            <button id="stopBtn" class="stop" disabled>Stop Detection</button>
+        </div>
+        
+        <div class="visualizer">
+            <div class="beat-indicators">
+                <div class="beat-indicator kick" id="kickIndicator">
+                    <h3>Kick</h3>
+                    <div class="indicator-light"></div>
+                    <div class="energy-bar">
+                        <div class="energy-fill" id="kickEnergy"></div>
+                    </div>
+                </div>
+                <div class="beat-indicator snare" id="snareIndicator">
+                    <h3>Snare</h3>
+                    <div class="indicator-light"></div>
+                    <div class="energy-bar">
+                        <div class="energy-fill" id="snareEnergy"></div>
+                    </div>
+                </div>
+                <div class="beat-indicator hihat" id="hihatIndicator">
+                    <h3>Hi-Hat</h3>
+                    <div class="indicator-light"></div>
+                    <div class="energy-bar">
+                        <div class="energy-fill" id="hihatEnergy"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <canvas id="spectrum"></canvas>
+            
+            <div class="info">
+                <strong>How to use:</strong> Select an audio input source (microphone, system audio, or line-in), 
+                then click "Start Detection". Adjust the frequency ranges directly on the spectrum visualizer by 
+                dragging the colored rectangles. Click and drag the edges to resize a range, or click and drag the 
+                middle to move the entire range. The colored overlays show which frequencies are being monitored for 
+                each drum element. Beat detection thresholds are preset but can be adjusted in the code if needed.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let audioContext;
+        let analyser;
+        let dataArray;
+        let bufferLength;
+        let source;
+        let animationId;
+        let isRunning = false;
+
+        // Beat detection state
+        const beatState = {
+            kick: { history: [], lastBeat: 0 },
+            snare: { history: [], lastBeat: 0 },
+            hihat: { history: [], lastBeat: 0 }
+        };
+
+        const HISTORY_SIZE = 40;
+        const COOLDOWN_MS = 100;
+
+        // Frequency range settings (stored in variables now)
+        const rangeSettings = {
+            kick: { low: 20, high: 150, threshold: 1.3 },
+            snare: { low: 150, high: 500, threshold: 1.2 },
+            hihat: { low: 5000, high: 12000, threshold: 1.15 }
+        };
+
+        // Dragging state
+        let dragState = {
+            isDragging: false,
+            dragType: null, // 'kick', 'snare', 'hihat'
+            dragEdge: null, // 'low', 'high', 'middle'
+            startX: 0,
+            startLow: 0,
+            startHigh: 0
+        };
+
+        // Initialize audio input devices
+        async function initAudioDevices() {
+            try {
+                // Request microphone permission first to get device labels and IDs
+                await navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        // Stop the stream immediately - we just needed permission
+                        stream.getTracks().forEach(track => track.stop());
+                    });
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices.filter(device => device.kind === 'audioinput');
+
+                const select = document.getElementById('audioSource');
+                select.innerHTML = '<option value="">Select audio source...</option>';
+
+                audioInputs.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.textContent = device.label || `Microphone ${select.options.length}`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error enumerating devices:', error);
+                alert('Error accessing audio devices. Please check permissions.');
+            }
+        }
+
+        // Get current settings
+        function getSettings() {
+            return rangeSettings;
+        }
+
+        // Get frequency bin index from Hz
+        function freqToIndex(freq) {
+            const nyquist = audioContext.sampleRate / 2;
+            return Math.round(freq / nyquist * bufferLength);
+        }
+
+        // Calculate energy in frequency range
+        function getEnergyInRange(lowFreq, highFreq) {
+            const lowIndex = freqToIndex(lowFreq);
+            const highIndex = freqToIndex(highFreq);
+            
+            let sum = 0;
+            for (let i = lowIndex; i <= highIndex && i < dataArray.length; i++) {
+                sum += dataArray[i];
+            }
+            
+            return sum / (highIndex - lowIndex + 1);
+        }
+
+        // Detect beat using energy history
+        function detectBeat(type, energy, threshold) {
+            const state = beatState[type];
+            const now = Date.now();
+            
+            // Add to history
+            state.history.push(energy);
+            if (state.history.length > HISTORY_SIZE) {
+                state.history.shift();
+            }
+            
+            // Need enough history
+            if (state.history.length < HISTORY_SIZE) {
+                return false;
+            }
+            
+            // Cooldown period
+            if (now - state.lastBeat < COOLDOWN_MS) {
+                return false;
+            }
+            
+            // Calculate average energy
+            const avg = state.history.reduce((a, b) => a + b, 0) / state.history.length;
+            
+            // Detect if current energy is significantly higher than average
+            if (energy > avg * threshold) {
+                state.lastBeat = now;
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Visualize spectrum
+        function visualize() {
+            if (!isRunning) return;
+            
+            analyser.getByteFrequencyData(dataArray);
+            
+            const canvas = document.getElementById('spectrum');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            
+            // Clear canvas
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Get settings
+            const settings = getSettings();
+            
+            // Draw spectrum bars (white/gray)
+            const barWidth = canvas.width / bufferLength;
+            let x = 0;
+            
+            for (let i = 0; i < bufferLength; i++) {
+                const barHeight = (dataArray[i] / 255) * canvas.height;
+                
+                ctx.fillStyle = 'rgba(150, 150, 150, 0.6)';
+                ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                
+                x += barWidth;
+            }
+            
+            // Draw frequency range rectangles
+            const nyquist = audioContext.sampleRate / 2;
+            
+            // Helper function to draw range rectangle
+            function drawRangeRect(lowFreq, highFreq, color, label) {
+                const xStart = (lowFreq / nyquist) * canvas.width;
+                const xEnd = (highFreq / nyquist) * canvas.width;
+                const width = xEnd - xStart;
+                
+                // Draw semi-transparent rectangle
+                ctx.fillStyle = color;
+                ctx.fillRect(xStart, 0, width, canvas.height);
+                
+                // Draw border
+                ctx.strokeStyle = color.replace('0.2', '0.8');
+                ctx.lineWidth = 2;
+                ctx.strokeRect(xStart, 0, width, canvas.height);
+                
+                // Draw label
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(label, xStart + width / 2, 20);
+                
+                // Draw frequency labels
+                ctx.font = '11px Arial';
+                ctx.fillText(`${lowFreq}Hz`, xStart + 5, canvas.height - 10);
+                ctx.fillText(`${highFreq}Hz`, xEnd - 5, canvas.height - 10);
+            }
+            
+            // Draw each drum range
+            drawRangeRect(settings.kick.low, settings.kick.high, 'rgba(255, 68, 68, 0.2)', 'KICK');
+            drawRangeRect(settings.snare.low, settings.snare.high, 'rgba(68, 255, 68, 0.2)', 'SNARE');
+            drawRangeRect(settings.hihat.low, settings.hihat.high, 'rgba(68, 68, 255, 0.2)', 'HI-HAT');
+            
+            // Detect beats
+            const kickEnergy = getEnergyInRange(settings.kick.low, settings.kick.high);
+            const snareEnergy = getEnergyInRange(settings.snare.low, settings.snare.high);
+            const hihatEnergy = getEnergyInRange(settings.hihat.low, settings.hihat.high);
+            
+            // Update energy bars
+            document.getElementById('kickEnergy').style.width = `${(kickEnergy / 255) * 100}%`;
+            document.getElementById('snareEnergy').style.width = `${(snareEnergy / 255) * 100}%`;
+            document.getElementById('hihatEnergy').style.width = `${(hihatEnergy / 255) * 100}%`;
+            
+            // Check for beats
+            const kickBeat = detectBeat('kick', kickEnergy, settings.kick.threshold);
+            const snareBeat = detectBeat('snare', snareEnergy, settings.snare.threshold);
+            const hihatBeat = detectBeat('hihat', hihatEnergy, settings.hihat.threshold);
+            
+            // Update indicators
+            document.getElementById('kickIndicator').classList.toggle('active', kickBeat);
+            document.getElementById('snareIndicator').classList.toggle('active', snareBeat);
+            document.getElementById('hihatIndicator').classList.toggle('active', hihatBeat);
+            
+            animationId = requestAnimationFrame(visualize);
+        }
+
+        // Start detection
+        async function startDetection() {
+            const deviceId = document.getElementById('audioSource').value;
+            
+            if (!deviceId) {
+                alert('Please select an audio source first');
+                return;
+            }
+            
+            try {
+                // Create audio context
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Get microphone stream
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        deviceId: { exact: deviceId },
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+                
+                // Create analyser
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+                analyser.smoothingTimeConstant = 0.8;
+                
+                bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                
+                // Connect source
+                source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+                
+                // Reset beat state
+                beatState.kick.history = [];
+                beatState.snare.history = [];
+                beatState.hihat.history = [];
+                
+                isRunning = true;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                
+                visualize();
+            } catch (error) {
+                console.error('Error starting detection:', error);
+                alert('Error accessing audio: ' + error.message);
+            }
+        }
+
+        // Stop detection
+        function stopDetection() {
+            isRunning = false;
+            
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            
+            if (source) {
+                source.disconnect();
+                source.mediaStream.getTracks().forEach(track => track.stop());
+            }
+            
+            if (audioContext) {
+                audioContext.close();
+            }
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            
+            // Clear indicators
+            document.getElementById('kickIndicator').classList.remove('active');
+            document.getElementById('snareIndicator').classList.remove('active');
+            document.getElementById('hihatIndicator').classList.remove('active');
+        }
+
+        // Canvas interaction handlers
+        function setupCanvasInteraction() {
+            const canvas = document.getElementById('spectrum');
+            const EDGE_THRESHOLD = 10; // pixels
+
+            canvas.addEventListener('mousedown', (e) => {
+                if (!isRunning) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const canvasWidth = rect.width;
+                const nyquist = audioContext.sampleRate / 2;
+                const settings = getSettings();
+
+                // Check which range we're clicking on
+                const ranges = [
+                    { type: 'kick', ...settings.kick, color: 'rgba(255, 68, 68, 0.2)' },
+                    { type: 'snare', ...settings.snare, color: 'rgba(68, 255, 68, 0.2)' },
+                    { type: 'hihat', ...settings.hihat, color: 'rgba(68, 68, 255, 0.2)' }
+                ];
+
+                for (const range of ranges) {
+                    const xStart = (range.low / nyquist) * canvasWidth;
+                    const xEnd = (range.high / nyquist) * canvasWidth;
+
+                    // Check if clicking on low edge
+                    if (Math.abs(x - xStart) < EDGE_THRESHOLD) {
+                        dragState = {
+                            isDragging: true,
+                            dragType: range.type,
+                            dragEdge: 'low',
+                            startX: x,
+                            startLow: range.low,
+                            startHigh: range.high
+                        };
+                        canvas.style.cursor = 'ew-resize';
+                        return;
+                    }
+                    // Check if clicking on high edge
+                    else if (Math.abs(x - xEnd) < EDGE_THRESHOLD) {
+                        dragState = {
+                            isDragging: true,
+                            dragType: range.type,
+                            dragEdge: 'high',
+                            startX: x,
+                            startLow: range.low,
+                            startHigh: range.high
+                        };
+                        canvas.style.cursor = 'ew-resize';
+                        return;
+                    }
+                    // Check if clicking inside the range
+                    else if (x >= xStart && x <= xEnd) {
+                        dragState = {
+                            isDragging: true,
+                            dragType: range.type,
+                            dragEdge: 'middle',
+                            startX: x,
+                            startLow: range.low,
+                            startHigh: range.high
+                        };
+                        canvas.style.cursor = 'move';
+                        return;
+                    }
+                }
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isRunning) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const canvasWidth = rect.width;
+                const nyquist = audioContext.sampleRate / 2;
+
+                if (dragState.isDragging) {
+                    const deltaX = x - dragState.startX;
+                    const deltaFreq = (deltaX / canvasWidth) * nyquist;
+
+                    const type = dragState.dragType;
+                    const maxFreq = nyquist; // Use full frequency spectrum for all ranges
+
+                    if (dragState.dragEdge === 'low') {
+                        let newLow = Math.max(0, dragState.startLow + deltaFreq);
+                        let currentHigh = rangeSettings[type].high;
+
+                        // Allow swapping if dragged past the high edge
+                        if (newLow > currentHigh) {
+                            rangeSettings[type].low = Math.round(currentHigh);
+                            rangeSettings[type].high = Math.round(Math.min(maxFreq, newLow));
+                        } else {
+                            rangeSettings[type].low = Math.round(newLow);
+                        }
+                    } else if (dragState.dragEdge === 'high') {
+                        let newHigh = Math.min(maxFreq, dragState.startHigh + deltaFreq);
+                        let currentLow = rangeSettings[type].low;
+
+                        // Allow swapping if dragged past the low edge
+                        if (newHigh < currentLow) {
+                            rangeSettings[type].high = Math.round(currentLow);
+                            rangeSettings[type].low = Math.round(Math.max(0, newHigh));
+                        } else {
+                            rangeSettings[type].high = Math.round(newHigh);
+                        }
+                    } else if (dragState.dragEdge === 'middle') {
+                        const width = dragState.startHigh - dragState.startLow;
+                        let newLow = Math.max(0, dragState.startLow + deltaFreq);
+                        let newHigh = Math.min(maxFreq, dragState.startHigh + deltaFreq);
+
+                        // Keep width constant
+                        if (newLow < 0) {
+                            newLow = 0;
+                            newHigh = width;
+                        }
+                        if (newHigh > maxFreq) {
+                            newHigh = maxFreq;
+                            newLow = maxFreq - width;
+                        }
+
+                        rangeSettings[type].low = Math.round(newLow);
+                        rangeSettings[type].high = Math.round(newHigh);
+                    }
+                } else {
+                    // Update cursor based on hover position
+                    const settings = getSettings();
+                    const ranges = [
+                        { type: 'kick', ...settings.kick },
+                        { type: 'snare', ...settings.snare },
+                        { type: 'hihat', ...settings.hihat }
+                    ];
+
+                    let cursorSet = false;
+                    const EDGE_THRESHOLD = 10;
+
+                    for (const range of ranges) {
+                        const xStart = (range.low / nyquist) * canvasWidth;
+                        const xEnd = (range.high / nyquist) * canvasWidth;
+
+                        if (Math.abs(x - xStart) < EDGE_THRESHOLD || Math.abs(x - xEnd) < EDGE_THRESHOLD) {
+                            canvas.style.cursor = 'ew-resize';
+                            cursorSet = true;
+                            break;
+                        } else if (x >= xStart && x <= xEnd) {
+                            canvas.style.cursor = 'move';
+                            cursorSet = true;
+                            break;
+                        }
+                    }
+
+                    if (!cursorSet) {
+                        canvas.style.cursor = 'crosshair';
+                    }
+                }
+            });
+
+            canvas.addEventListener('mouseup', () => {
+                dragState.isDragging = false;
+                dragState.dragType = null;
+                dragState.dragEdge = null;
+            });
+
+            canvas.addEventListener('mouseleave', () => {
+                if (dragState.isDragging) {
+                    dragState.isDragging = false;
+                    dragState.dragType = null;
+                    dragState.dragEdge = null;
+                }
+                canvas.style.cursor = 'crosshair';
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initAudioDevices();
+            setupCanvasInteraction();
+            
+            document.getElementById('startBtn').addEventListener('click', startDetection);
+            document.getElementById('stopBtn').addEventListener('click', stopDetection);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Piano Chord Analyzer</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎹 Piano Chord Analyzer</h1>
+        <p class="subtitle">Real-time chord detection and progression suggestions</p>
+
+        <div class="control-panel">
+            <div style="text-align: center;">
+                <button id="startBtn" class="btn">Start Listening</button>
+                <div id="status" class="status">Click "Start Listening" to begin</div>
+            </div>
+        </div>
+
+        <div class="display-grid">
+            <div class="display-card">
+                <h2>Current Chord</h2>
+                <div id="currentChord" class="current-chord">—</div>
+                <div class="confidence-meter">
+                    <div style="opacity: 0.8;">Detection Confidence</div>
+                    <div class="confidence-bar">
+                        <div id="confidenceBar" class="confidence-fill" style="width: 0%">0%</div>
+                    </div>
+                </div>
+                <div style="margin-top: 20px; opacity: 0.8;">Notes Detected:</div>
+                <div id="notesDetected" class="notes-detected"></div>
+            </div>
+
+            <div class="display-card">
+                <h2>Suggested Next Chords</h2>
+                <div id="suggestions" class="suggestions">
+                    <div style="grid-column: 1/-1; text-align: center; opacity: 0.6; padding: 20px;">
+                        Play a chord to see suggestions
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="display-card">
+            <h2>Frequency Spectrum</h2>
+            <div class="visualization">
+                <canvas id="spectrumCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

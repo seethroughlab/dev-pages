@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Beat Detector</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Real-Time Beat Detector</h1>
+
+        <div class="controls">
+            <div class="audio-input">
+                <label for="audioSource">Audio Input Source:</label>
+                <select id="audioSource">
+                    <option value="">Select audio source...</option>
+                </select>
+            </div>
+
+            <button id="startBtn">Start Detection</button>
+            <button id="stopBtn" class="stop" disabled>Stop Detection</button>
+        </div>
+
+        <div class="visualizer">
+            <div class="beat-indicators">
+                <div id="kickIndicator" class="beat-indicator kick">
+                    <h3>KICK</h3>
+                    <div class="indicator-light"></div>
+                    <div class="energy-bar">
+                        <div id="kickEnergy" class="energy-fill" style="width: 0"></div>
+                    </div>
+                </div>
+
+                <div id="snareIndicator" class="beat-indicator snare">
+                    <h3>SNARE</h3>
+                    <div class="indicator-light"></div>
+                    <div class="energy-bar">
+                        <div id="snareEnergy" class="energy-fill" style="width: 0"></div>
+                    </div>
+                </div>
+
+                <div id="hihatIndicator" class="beat-indicator hihat">
+                    <h3>HI-HAT</h3>
+                    <div class="indicator-light"></div>
+                    <div class="energy-bar">
+                        <div id="hihatEnergy" class="energy-fill" style="width: 0"></div>
+                    </div>
+                </div>
+            </div>
+
+            <canvas id="spectrum"></canvas>
+
+            <div class="info">
+                <strong>How to use:</strong> Select an audio input source (microphone, system audio, or line-in),
+                then click "Start Detection". Adjust the frequency ranges by dragging the colored rectangles' edges
+                or middle. The <strong>yellow dashed lines</strong> are the detection thresholds - drag them up/down
+                to adjust sensitivity (higher = less sensitive, lower = more sensitive). The threshold value shows
+                how much above average the energy must be to trigger a beat (e.g., 1.3x = 30% above average).
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
