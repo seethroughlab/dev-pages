@@ -35,21 +35,106 @@ export const chordTypes = {
 };
 
 // Common chord progressions for suggestions
+// Each progression includes the chord and the emotional feeling it creates
 export const chordProgressions = {
-    'C': ['F', 'G', 'Am', 'Dm', 'Em'],
-    'Cm': ['Fm', 'Gm', 'Ab', 'Bb', 'Eb'],
-    'D': ['G', 'A', 'Bm', 'Em', 'F#m'],
-    'Dm': ['Gm', 'Am', 'Bb', 'C', 'F'],
-    'E': ['A', 'B', 'C#m', 'F#m', 'G#m'],
-    'Em': ['Am', 'Bm', 'C', 'D', 'G'],
-    'F': ['Bb', 'C', 'Dm', 'Gm', 'Am'],
-    'Fm': ['Bbm', 'Cm', 'Db', 'Eb', 'Ab'],
-    'G': ['C', 'D', 'Em', 'Am', 'Bm'],
-    'Gm': ['Cm', 'Dm', 'Eb', 'F', 'Bb'],
-    'A': ['D', 'E', 'F#m', 'Bm', 'C#m'],
-    'Am': ['Dm', 'Em', 'F', 'G', 'C'],
-    'B': ['E', 'F#', 'G#m', 'C#m', 'D#m'],
-    'Bm': ['Em', 'F#m', 'G', 'A', 'D']
+    'C': [
+        { chord: 'F', feeling: 'warm and stable' },
+        { chord: 'G', feeling: 'bright and resolved' },
+        { chord: 'Am', feeling: 'melancholic' },
+        { chord: 'Dm', feeling: 'contemplative' },
+        { chord: 'Em', feeling: 'bittersweet' }
+    ],
+    'Cm': [
+        { chord: 'Fm', feeling: 'deeper darkness' },
+        { chord: 'Gm', feeling: 'tense and yearning' },
+        { chord: 'Ab', feeling: 'hopeful relief' },
+        { chord: 'Bb', feeling: 'lifting spirit' },
+        { chord: 'Eb', feeling: 'warm embrace' }
+    ],
+    'D': [
+        { chord: 'G', feeling: 'bright and open' },
+        { chord: 'A', feeling: 'triumphant' },
+        { chord: 'Bm', feeling: 'wistful longing' },
+        { chord: 'Em', feeling: 'gentle sadness' },
+        { chord: 'F#m', feeling: 'mysterious' }
+    ],
+    'Dm': [
+        { chord: 'Gm', feeling: 'brooding depth' },
+        { chord: 'Am', feeling: 'somber reflection' },
+        { chord: 'Bb', feeling: 'comforting warmth' },
+        { chord: 'C', feeling: 'hopeful emergence' },
+        { chord: 'F', feeling: 'peaceful resolution' }
+    ],
+    'E': [
+        { chord: 'A', feeling: 'powerful and bold' },
+        { chord: 'B', feeling: 'soaring energy' },
+        { chord: 'C#m', feeling: 'passionate longing' },
+        { chord: 'F#m', feeling: 'introspective' },
+        { chord: 'G#m', feeling: 'dramatic tension' }
+    ],
+    'Em': [
+        { chord: 'Am', feeling: 'deepening sorrow' },
+        { chord: 'Bm', feeling: 'wistful nostalgia' },
+        { chord: 'C', feeling: 'gentle comfort' },
+        { chord: 'D', feeling: 'emerging hope' },
+        { chord: 'G', feeling: 'bright resolution' }
+    ],
+    'F': [
+        { chord: 'Bb', feeling: 'rich and full' },
+        { chord: 'C', feeling: 'uplifting' },
+        { chord: 'Dm', feeling: 'tender yearning' },
+        { chord: 'Gm', feeling: 'dramatic depth' },
+        { chord: 'Am', feeling: 'sweet sadness' }
+    ],
+    'Fm': [
+        { chord: 'Bbm', feeling: 'heavy melancholy' },
+        { chord: 'Cm', feeling: 'somber mood' },
+        { chord: 'Db', feeling: 'ethereal beauty' },
+        { chord: 'Eb', feeling: 'warm light' },
+        { chord: 'Ab', feeling: 'smooth comfort' }
+    ],
+    'G': [
+        { chord: 'C', feeling: 'classic and stable' },
+        { chord: 'D', feeling: 'confident stride' },
+        { chord: 'Em', feeling: 'romantic melancholy' },
+        { chord: 'Am', feeling: 'thoughtful turn' },
+        { chord: 'Bm', feeling: 'introspective' }
+    ],
+    'Gm': [
+        { chord: 'Cm', feeling: 'deeper sadness' },
+        { chord: 'Dm', feeling: 'brooding intensity' },
+        { chord: 'Eb', feeling: 'comforting glow' },
+        { chord: 'F', feeling: 'hopeful lift' },
+        { chord: 'Bb', feeling: 'resolving warmth' }
+    ],
+    'A': [
+        { chord: 'D', feeling: 'strong and clear' },
+        { chord: 'E', feeling: 'energetic drive' },
+        { chord: 'F#m', feeling: 'sweet melancholy' },
+        { chord: 'Bm', feeling: 'contemplative' },
+        { chord: 'C#m', feeling: 'passionate depth' }
+    ],
+    'Am': [
+        { chord: 'Dm', feeling: 'deeper introspection' },
+        { chord: 'Em', feeling: 'quiet sadness' },
+        { chord: 'F', feeling: 'gentle warmth' },
+        { chord: 'G', feeling: 'hopeful rise' },
+        { chord: 'C', feeling: 'peaceful return' }
+    ],
+    'B': [
+        { chord: 'E', feeling: 'bright and bold' },
+        { chord: 'F#', feeling: 'intense energy' },
+        { chord: 'G#m', feeling: 'passionate drama' },
+        { chord: 'C#m', feeling: 'deep emotion' },
+        { chord: 'D#m', feeling: 'mysterious allure' }
+    ],
+    'Bm': [
+        { chord: 'Em', feeling: 'gentle sorrow' },
+        { chord: 'F#m', feeling: 'wistful beauty' },
+        { chord: 'G', feeling: 'comforting resolve' },
+        { chord: 'A', feeling: 'confident lift' },
+        { chord: 'D', feeling: 'bright resolution' }
+    ]
 };
 
 // Analyser configuration

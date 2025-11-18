@@ -6,11 +6,13 @@
 import { AudioAnalyzer } from './audioAnalyzer.js';
 import { ChordDetector } from './chordDetector.js';
 import { SpectrumVisualizer } from './visualizer.js';
+import { MidiInput } from './midiInput.js';
 
 class ChordAnalyzerApp {
     constructor() {
         // Initialize modules
         this.audioAnalyzer = new AudioAnalyzer();
+        this.midiInput = new MidiInput();
         this.chordDetector = new ChordDetector();
         this.visualizer = null;
 
@@ -21,13 +23,22 @@ class ChordAnalyzerApp {
         this.notesDetectedEl = document.getElementById('notesDetected');
         this.suggestionsEl = document.getElementById('suggestions');
         this.confidenceBar = document.getElementById('confidenceBar');
+        this.inputSourceRadios = document.querySelectorAll('input[name="inputSource"]');
+        this.midiDeviceSection = document.getElementById('midiDeviceSection');
+        this.midiDeviceSelect = document.getElementById('midiDevice');
 
         // Analysis state
         this.isListening = false;
         this.animationId = null;
+        this.inputSource = 'microphone'; // 'microphone' or 'midi'
+        this.currentMidiNotes = [];
 
         // Bind event handlers
         this.startBtn.addEventListener('click', () => this.toggleListening());
+        this.inputSourceRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => this.handleInputSourceChange(e.target.value));
+        });
+        this.midiDeviceSelect.addEventListener('change', (e) => this.handleMidiDeviceChange(e.target.value));
     }
 
     /**
@@ -36,7 +47,80 @@ class ChordAnalyzerApp {
     async init() {
         // Initialize visualizer
         this.visualizer = new SpectrumVisualizer('spectrumCanvas', this.audioAnalyzer);
+
+        // Check for MIDI support
+        if (MidiInput.isSupported()) {
+            try {
+                await this.midiInput.initialize();
+                console.log('MIDI support available');
+            } catch (error) {
+                console.error('Failed to initialize MIDI:', error);
+                // Disable MIDI option if initialization fails
+                const midiRadio = document.querySelector('input[name="inputSource"][value="midi"]');
+                if (midiRadio) {
+                    midiRadio.disabled = true;
+                    midiRadio.parentElement.style.opacity = '0.5';
+                    midiRadio.parentElement.title = 'MIDI not available';
+                }
+            }
+        } else {
+            // Disable MIDI option if not supported
+            const midiRadio = document.querySelector('input[name="inputSource"][value="midi"]');
+            if (midiRadio) {
+                midiRadio.disabled = true;
+                midiRadio.parentElement.style.opacity = '0.5';
+                midiRadio.parentElement.title = 'MIDI not supported in this browser';
+            }
+        }
+
         console.log('Chord analyzer app initialized');
+    }
+
+    /**
+     * Handle input source change
+     */
+    handleInputSourceChange(source) {
+        this.inputSource = source;
+
+        // Show/hide MIDI device selector
+        if (source === 'midi') {
+            this.midiDeviceSection.style.display = 'block';
+            this.loadMidiDevices();
+        } else {
+            this.midiDeviceSection.style.display = 'none';
+        }
+    }
+
+    /**
+     * Load available MIDI devices
+     */
+    loadMidiDevices() {
+        const devices = this.midiInput.getInputDevices();
+
+        // Clear existing options (except first one)
+        this.midiDeviceSelect.innerHTML = '<option value="">Select a MIDI device...</option>';
+
+        // Add device options
+        devices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.id;
+            option.textContent = device.name;
+            this.midiDeviceSelect.appendChild(option);
+        });
+
+        if (devices.length === 0) {
+            this.status.textContent = 'No MIDI devices found. Please connect a MIDI keyboard.';
+        }
+    }
+
+    /**
+     * Handle MIDI device selection
+     */
+    handleMidiDeviceChange(deviceId) {
+        if (deviceId) {
+            this.midiInput.selectInput(deviceId);
+            this.status.textContent = 'MIDI device selected. Click "Start Listening" to begin.';
+        }
     }
 
     /**
@@ -51,29 +135,62 @@ class ChordAnalyzerApp {
     }
 
     /**
-     * Start listening to microphone
+     * Start listening to selected input source
      */
     async startListening() {
         try {
-            this.status.textContent = 'Requesting microphone access...';
+            if (this.inputSource === 'microphone') {
+                this.status.textContent = 'Requesting microphone access...';
 
-            // Initialize audio analyzer
-            await this.audioAnalyzer.initialize();
+                // Initialize audio analyzer
+                await this.audioAnalyzer.initialize();
 
-            // Start visualization
-            this.visualizer.start();
+                // Start visualization
+                this.visualizer.start();
 
-            // Update UI
-            this.isListening = true;
-            this.startBtn.textContent = 'Stop Listening';
-            this.startBtn.classList.add('active');
-            this.status.textContent = '🎤 Listening... Play some chords!';
+                // Update UI
+                this.isListening = true;
+                this.startBtn.textContent = 'Stop Listening';
+                this.startBtn.classList.add('active');
+                this.status.textContent = '🎤 Listening... Play some chords!';
 
-            // Start analysis loop
-            this.analyze();
+                // Start analysis loop
+                this.analyze();
+            } else if (this.inputSource === 'midi') {
+                // Check if MIDI device is selected
+                if (!this.midiDeviceSelect.value) {
+                    this.status.textContent = 'Please select a MIDI device first';
+                    return;
+                }
+
+                // Set up MIDI note callback
+                this.midiInput.onNotesChange = (notes) => {
+                    this.currentMidiNotes = notes;
+                    this.updateNotesDisplay(notes);
+
+                    // Identify chord if enough notes
+                    if (notes.length >= 2) {
+                        const chord = this.chordDetector.identifyChord(notes);
+                        if (chord) {
+                            this.updateChordDisplay(chord);
+                            this.updateSuggestions(chord);
+                        }
+                    } else {
+                        this.currentChordEl.textContent = '—';
+                        this.confidenceBar.style.width = '0%';
+                        this.confidenceBar.textContent = '0%';
+                    }
+                };
+
+                // Update UI
+                this.isListening = true;
+                this.startBtn.textContent = 'Stop Listening';
+                this.startBtn.classList.add('active');
+                this.status.textContent = '🎹 Listening to MIDI... Play some chords!';
+            }
         } catch (error) {
             console.error('Error starting listening:', error);
-            this.status.textContent = 'Error: Could not access microphone';
+            this.status.textContent = `Error: ${error.message}`;
         }
     }
 
@@ -81,15 +198,22 @@ class ChordAnalyzerApp {
      * Stop listening
      */
     stopListening() {
-        // Stop audio analyzer
-        this.audioAnalyzer.stop();
+        if (this.inputSource === 'microphone') {
+            // Stop audio analyzer
+            this.audioAnalyzer.stop();
 
-        // Stop visualization
-        this.visualizer.stop();
+            // Stop visualization
+            this.visualizer.stop();
 
-        // Cancel animation loop
-        if (this.animationId) {
-            cancelAnimationFrame(this.animationId);
+            // Cancel animation loop
+            if (this.animationId) {
+                cancelAnimationFrame(this.animationId);
+            }
+        } else if (this.inputSource === 'midi') {
+            // Stop MIDI input
+            this.midiInput.stop();
+            this.midiInput.onNotesChange = null;
+            this.currentMidiNotes = [];
         }
 
         // Update UI
@@ -167,7 +291,17 @@ class ChordAnalyzerApp {
             this.suggestionsEl.innerHTML = '<div style="grid-column: 1/-1; text-align: center; opacity: 0.6; padding: 20px;">No suggestions available</div>';
         } else {
             this.suggestionsEl.innerHTML = suggestions
-                .map(s => `<div class="suggestion-chip">${s}</div>`)
+                .map(s => {
+                    // Handle both object format (with feeling) and string format
+                    if (typeof s === 'object') {
+                        return `<div class="suggestion-chip">
+                            <div class="chord-name">${s.chord}</div>
+                            <div class="chord-feeling">${s.feeling}</div>
+                        </div>`;
+                    } else {
+                        return `<div class="suggestion-chip">${s}</div>`;
+                    }
+                })
                 .join('');
         }
     }

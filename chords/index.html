@@ -12,9 +12,28 @@
         <p class="subtitle">Real-time chord detection and progression suggestions</p>
 
         <div class="control-panel">
-            <div style="text-align: center;">
+            <div class="input-source-section">
+                <label style="font-weight: 600; margin-bottom: 10px; display: block;">Input Source:</label>
+                <div class="input-source-options">
+                    <label class="radio-option">
+                        <input type="radio" name="inputSource" value="microphone" checked>
+                        <span>🎤 Microphone</span>
+                    </label>
+                    <label class="radio-option">
+                        <input type="radio" name="inputSource" value="midi">
+                        <span>🎹 MIDI Keyboard</span>
+                    </label>
+                </div>
+                <div id="midiDeviceSection" class="midi-device-section" style="display: none;">
+                    <label for="midiDevice" style="font-weight: 600; margin-top: 15px; display: block;">MIDI Device:</label>
+                    <select id="midiDevice" class="midi-select">
+                        <option value="">Select a MIDI device...</option>
+                    </select>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
                 <button id="startBtn" class="btn">Start Listening</button>
-                <div id="status" class="status">Click "Start Listening" to begin</div>
+                <div id="status" class="status">Select input source and click "Start Listening"</div>
             </div>
         </div>
 
