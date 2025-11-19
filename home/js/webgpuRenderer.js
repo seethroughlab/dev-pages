@@ -56,10 +56,10 @@ export class WebGPURenderer {
      */
     async loadShaders() {
         const [vertexShaderCode, fragmentShaderCode, bgVertexShaderCode, bgFragmentShaderCode] = await Promise.all([
-            fetch('./shaders/logo.vert.wgsl').then(r => r.text()),
-            fetch('./shaders/logo.frag.wgsl').then(r => r.text()),
-            fetch('./shaders/background.vert.wgsl').then(r => r.text()),
-            fetch('./shaders/background.frag.wgsl').then(r => r.text())
+            fetch('home/shaders/logo.vert.wgsl').then(r => r.text()),
+            fetch('home/shaders/logo.frag.wgsl').then(r => r.text()),
+            fetch('home/shaders/background.vert.wgsl').then(r => r.text()),
+            fetch('home/shaders/background.frag.wgsl').then(r => r.text())
         ]);
 
         return { vertexShaderCode, fragmentShaderCode, bgVertexShaderCode, bgFragmentShaderCode };

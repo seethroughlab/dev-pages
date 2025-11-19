@@ -311,7 +311,7 @@ function buildHallway() {
   });
 
   // Solid floor plane (layer 0 - visible to cameras)
-  // This is always visible, even when Floor FBO is disabled
+  // This is visible only when Floor FBO is disabled
   const floorGeometry = new THREE.PlaneGeometry(W, L);
   const floorMaterial = new THREE.MeshBasicMaterial({
     color: 0x0a0e14,  // Match background color
@@ -320,6 +320,7 @@ function buildHallway() {
   const solidFloor = new THREE.Mesh(floorGeometry, floorMaterial);
   solidFloor.rotation.x = -Math.PI / 2; // Rotate to be horizontal
   solidFloor.position.y = 0; // At ground level
+  solidFloor.name = 'solidFloor'; // Name it so we can find it later
   hallGroup.add(solidFloor);
 
   // Grid on floor (layer 1 - hide from camera previews)
@@ -421,11 +422,11 @@ let keyManagerOnBar = null;
 let chordManagerOnBar = null;
 
 // Function to create MIDI-related managers
-function createMIDIManagers() {
+async function createMIDIManagers() {
   console.log('[MIDI] Creating MIDI managers...');
 
   midiManager = new MIDIManager();
-  midiManager.init();
+  await midiManager.init();
 
   clockManager = new ClockManager(120, midiManager);
 
@@ -443,6 +444,8 @@ function createMIDIManagers() {
 
   keyManager = new KeyManager(clockManager);
   keyManagerOnBar = clockManager.onBar;
+
+  console.log('[MIDI] Created managers - keyManager:', keyManager, 'chordManager:', chordManager);
 
   // Set up clock callbacks after all managers are created
   setupClockCallbacks();
@@ -485,11 +488,23 @@ function destroyMIDIManagers() {
   console.log('[MIDI] Managers destroyed');
 }
 
-// Create managers on startup if MIDI is enabled
-if (midiEnabledEarly) {
-  createMIDIManagers();
-} else {
-  console.log('[MIDI] MIDI disabled - managers not created');
+// Initialize systems asynchronously
+async function initializeSystems() {
+  // Create managers on startup if MIDI is enabled
+  if (midiEnabledEarly) {
+    await createMIDIManagers();
+    console.log('[MIDI] MIDI managers fully initialized');
+  } else {
+    console.log('[MIDI] MIDI disabled - managers not created');
+  }
+
+  // Create floor system on startup if enabled
+  if (floorEnabledEarly) {
+    console.log('[Floor] Creating floor with keyManager:', keyManager, 'chordManager:', chordManager);
+    createFloorSystem();
+  } else {
+    console.log('[Floor] Floor disabled - system not created');
+  }
 }
 
 // ===== Floor System =====
@@ -508,6 +523,12 @@ function createFloorSystem() {
   triggerZones = new TriggerZone(hallway, keyManager, chordManager);
   shaderFloor = createFBOFloor(hallway, triggerZones, renderer);
   scene.add(shaderFloor);
+
+  // Hide the solid floor when FBO floor is enabled
+  const solidFloor = scene.getObjectByName('solidFloor');
+  if (solidFloor) {
+    solidFloor.visible = false;
+  }
 
   console.log('[Floor] Floor system created');
 }
@@ -530,17 +551,16 @@ function destroyFloorSystem() {
     if (shaderFloor.material) shaderFloor.material.dispose();
   }
 
+  // Show the solid floor when FBO floor is disabled
+  const solidFloor = scene.getObjectByName('solidFloor');
+  if (solidFloor) {
+    solidFloor.visible = true;
+  }
+
   triggerZones = null;
   shaderFloor = null;
 
   console.log('[Floor] Floor system destroyed');
-}
-
-// Create floor system on startup if enabled
-if (floorEnabledEarly) {
-  createFloorSystem();
-} else {
-  console.log('[Floor] Floor disabled - system not created');
 }
 
 // Floor enabled state (will be set from cookie below)
@@ -587,13 +607,15 @@ function serializePerson(person) {
   const height = person.height;
   const xvel = person.xVelocity || 0;
   const yvel = person.isDwelling ? 0 : (person.speed * person.direction);
-  const x = person.xOffset;
-  const y = person.z;
+
+  // Normalize positions to 0-1 range
+  const xNormalized = Math.max(0, Math.min(1, (person.xOffset + hallway.width_m * 0.5) / hallway.width_m));
+  const yNormalized = Math.max(0, Math.min(1, (person.z + hallway.length_m * 0.5) / hallway.length_m));
 
   return {
     id: person.id,
-    x: parseFloat(x.toFixed(4)),
-    y: parseFloat(y.toFixed(4)),
+    x: parseFloat(xNormalized.toFixed(4)),
+    y: parseFloat(yNormalized.toFixed(4)),
     w: parseFloat(width.toFixed(4)),
     h: parseFloat(height.toFixed(4)),
     xvel: parseFloat(xvel.toFixed(4)),
@@ -1531,7 +1553,7 @@ const peopleController = featuresFolder.add(featureSettings, 'peopleEnabled').na
   }
 });
 
-const midiController = featuresFolder.add(featureSettings, 'midiEnabled').name('MIDI').onChange((value) => {
+const midiController = featuresFolder.add(featureSettings, 'midiEnabled').name('MIDI').onChange(async (value) => {
   setCookie('midiEnabled', value);
   console.log(`[Settings] Saved to cookie: midiEnabled = ${value}`);
 
@@ -1540,7 +1562,7 @@ const midiController = featuresFolder.add(featureSettings, 'midiEnabled').name('
     destroyMIDIManagers();
   } else {
     // Create MIDI managers
-    createMIDIManagers();
+    await createMIDIManagers();
   }
 
   // Show/hide entire MIDI folder and related folders
@@ -2771,4 +2793,8 @@ function animate() {
   });
 }
 
-animate();
+// Wait for systems to initialize before starting animation
+initializeSystems().then(() => {
+  console.log('[Main] All systems initialized, starting animation');
+  animate();
+});
