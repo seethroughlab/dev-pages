@@ -608,10 +608,11 @@ function serializePerson(person) {
   const xvel = person.xVelocity || 0;
   const yvel = person.isDwelling ? 0 : (person.speed * person.direction);
 
-  // Normalize positions to 0-1 range
+  // Normalize positions to 0-1 range within floor plane
   // x = blue axis (Z in Three.js) = hallway length
   // y = red axis (X in Three.js) = hallway width
-  const xNormalized = Math.max(0, Math.min(1, (person.z + hallway.length_m * 0.5) / hallway.length_m));
+  // Note: person.z ranges [0, length_m], person.xOffset ranges [-width_m/2, +width_m/2]
+  const xNormalized = Math.max(0, Math.min(1, person.z / hallway.length_m));
   const yNormalized = Math.max(0, Math.min(1, (person.xOffset + hallway.width_m * 0.5) / hallway.width_m));
 
   return {
